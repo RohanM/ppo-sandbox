@@ -43,6 +43,20 @@ class CriticModel(nn.Module):
         out = self.tanh(out)
         return out
 
+def get_advantages(values, masks, rewards):
+    lmbda = 0.95
+    gamma = 0.99
+
+    returns = []
+    gae = 0
+    for i in reversed(range(len(rewards))):
+        delta = rewards[i] + gamma * values[i + 1] * masks[i] - values[i]
+        gae = delta + gamma * lmbda * masks[i] * gae
+        returns.insert(0, gae + values[i])
+
+    adv = np.array(returns) - values[:-1]
+    return returns, (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
+
 
 env = gym.make('LunarLander-v2', new_step_api=True, render_mode='human')
 n_state = env.observation_space.shape[0]
@@ -86,6 +100,10 @@ for episode in range(max_episodes):
         if terminated or truncated:
             env.reset()
             break
+
+    q_value = critic(tensor(states[-1]))
+    values.append(q_value.item())
+    returns, advantages = get_advantages(values, masks, rewards)
 
     # Check if we've reached our target performance
     #if best_reward > 0.9:
