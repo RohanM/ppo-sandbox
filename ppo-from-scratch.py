@@ -55,6 +55,13 @@ critic = CriticModel(num_input=n_state)
 
 
 for episode in range(max_episodes):
+    states = []
+    actions = []
+    values = []
+    masks = []
+    rewards = []
+    actions_probs = []
+
     state = env.reset()
 
     for i in range(ppo_steps):
@@ -64,6 +71,15 @@ for episode in range(max_episodes):
         action = np.random.choice(n_actions, p=action_dist.detach().numpy())
 
         observation, reward, terminated, truncated, info = env.step(action)
+
+        mask = not (terminated or truncated)
+
+        states.append(state)
+        actions.append(action)
+        values.append(q_value.item())
+        masks.append(mask)
+        rewards.append(reward)
+        actions_probs.append(action_dist.detach().numpy())
 
         state = observation
 
