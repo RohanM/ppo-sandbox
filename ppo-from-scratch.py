@@ -40,7 +40,8 @@ class CriticModel(nn.Module):
         out = self.linear2(out)
         out = self.relu(out)
         out = self.linear3(out)
-        return self.tanh(out)
+        out = self.tanh(out)
+        return out
 
 
 env = gym.make('LunarLander-v2', new_step_api=True, render_mode='human')
@@ -49,10 +50,10 @@ n_actions = env.action_space.n
 
 ppo_steps = 128
 actor = ActorModel(num_input=n_state, num_output=n_actions)
-critic = CriticModel()
+critic = CriticModel(num_input=n_state)
+
 
 state = env.reset()
-
 
 for i in range(ppo_steps):
     state_input = tensor(state)
