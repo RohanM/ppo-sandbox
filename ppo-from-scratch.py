@@ -43,9 +43,10 @@ def get_advantages(values, masks, rewards):
         delta = rewards[i] + gamma * values[i + 1] * masks[i] - values[i]
         gae = delta + gamma * lmbda * masks[i] * gae
         returns.insert(0, gae + values[i])
+    t_returns = torch.cat(returns).float().unsqueeze(dim=1)
 
-    adv = tensor(returns).unsqueeze(dim=1) - values[:-1]
-    return returns, (adv - adv.mean()) / (adv.std() + 1e-10)
+    adv = t_returns - values[:-1]
+    return t_returns, (adv - adv.mean()) / (adv.std() + 1e-10)
 
 
 def ppo_loss(newpolicy_probs, oldpolicy_probs, advantages, rewards, values):
@@ -121,7 +122,6 @@ for episode in range(max_episodes):
     values = cat(values, q_value.detach())
 
     returns, advantages = get_advantages(values, masks, rewards)
-    returns = tensor(returns).float().unsqueeze(dim=1)
 
     # Training loop
     actor.train()
