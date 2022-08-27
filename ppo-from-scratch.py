@@ -51,19 +51,15 @@ def get_advantages(values, masks, rewards):
 
 def ppo_loss(newpolicy_probs, oldpolicy_probs, advantages, rewards, values):
     epsilon = 0.2
-    critic_discount = 0.5
-    entropy_beta = 0.001
 
     advantages = advantages.unsqueeze(dim=1)
-    ratio = torch.exp(torch.log(newpolicy_probs + 1e-10) - torch.log(oldpolicy_probs + 1e-10)).detach()
+    ratio = torch.exp(torch.log(newpolicy_probs + 1e-10) - torch.log(oldpolicy_probs + 1e-10))
     p1 = ratio * advantages
     p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
     actor_loss = -torch.mean(torch.minimum(p1, p2))
-    critic_loss = torch.mean(torch.square(rewards - values[:-1]))
-    total_loss = critic_discount * critic_loss + actor_loss - entropy_beta * torch.mean(
-        -(newpolicy_probs * torch.log(newpolicy_probs + 1e-10))
-    )
-    return total_loss
+    critic_loss = F.mse_loss(values[:-1], rewards)
+
+    return actor_loss, critic_loss
 
 
 def cat(a, b):
