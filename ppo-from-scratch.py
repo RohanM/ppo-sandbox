@@ -43,7 +43,7 @@ class CriticModel(nn.Module):
         return self.tanh(out)
 
 
-env = gym.make('LunarLander-v2')
+env = gym.make('LunarLander-v2', new_step_api=True, render_mode='human')
 n_state = env.observation_space.shape[0]
 n_actions = env.action_space.n
 
@@ -60,11 +60,10 @@ for i in range(ppo_steps):
     q_value = critic(state_input)
     action = np.random.choice(n_actions, p=action_dist.detach().numpy())
 
-    observation, reward, done, info = env.step(action)
-    env.render()
+    observation, reward, terminated, truncated, info = env.step(action)
 
     state = observation
 
-    if done:
+    if terminated or truncated:
         env.reset()
         break
