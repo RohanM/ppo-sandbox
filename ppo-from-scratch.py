@@ -87,7 +87,6 @@ critic_opt = optim.Adam(critic.parameters(), lr=1e-4)
 for episode in range(max_episodes):
     states = tensor([])
     actions = []
-    values = tensor([])
     masks = []
     rewards = tensor([])
     actions_probs = tensor([])
@@ -97,7 +96,6 @@ for episode in range(max_episodes):
     for i in range(ppo_steps):
         state_input = tensor(state)
         action_dist = actor(state_input)
-        q_value = critic(state_input)
         action = np.random.choice(n_actions, p=action_dist.detach().numpy())
 
         observation, reward, terminated, truncated, info = env.step(action)
@@ -106,7 +104,6 @@ for episode in range(max_episodes):
 
         states = cat(states, state_input)
         actions.append(action)
-        values = cat(values, q_value.detach())
         masks.append(mask)
         rewards = cat(rewards, tensor(reward).unsqueeze(dim=0))
         actions_probs = cat(actions_probs, action_dist.detach())
@@ -117,25 +114,23 @@ for episode in range(max_episodes):
             env.reset()
             break
 
-
-    q_value = critic(states[-1])
-    values = cat(values, q_value.detach())
-
-    returns, advantages = get_advantages(values, masks, rewards)
-
     # Training loop
     actor.train()
     critic.train()
     for epoch in range(num_epochs):
         # One episode per batch - is this optimal?
-        actor_loss = ppo_loss(actor(states), actions_probs, advantages, rewards, values)
-        critic_loss = F.mse_loss(critic(states), returns)
+        new_actions_probs = actor(states)
+        values = critic(torch.cat((states, states[-1].unsqueeze(dim=0))))
+        returns, advantages = get_advantages(values, masks, rewards)
 
-        actor_loss.backward()
-        critic_loss.backward()
+        actor_loss, critic_loss = ppo_loss(new_actions_probs, actions_probs, advantages, rewards, values)
+
+        actor_loss.backward(retain_graph=True)
         actor_opt.step()
-        critic_opt.step()
         actor_opt.zero_grad()
+
+        critic_loss.backward()
+        critic_opt.step()
         critic_opt.zero_grad()
 
         if epoch == 7:
