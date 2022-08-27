@@ -49,22 +49,28 @@ n_state = env.observation_space.shape[0]
 n_actions = env.action_space.n
 
 ppo_steps = 128
+max_episodes = 50
 actor = ActorModel(num_input=n_state, num_output=n_actions)
 critic = CriticModel(num_input=n_state)
 
 
-state = env.reset()
+for episode in range(max_episodes):
+    state = env.reset()
 
-for i in range(ppo_steps):
-    state_input = tensor(state)
-    action_dist = actor(state_input)
-    q_value = critic(state_input)
-    action = np.random.choice(n_actions, p=action_dist.detach().numpy())
+    for i in range(ppo_steps):
+        state_input = tensor(state)
+        action_dist = actor(state_input)
+        q_value = critic(state_input)
+        action = np.random.choice(n_actions, p=action_dist.detach().numpy())
 
-    observation, reward, terminated, truncated, info = env.step(action)
+        observation, reward, terminated, truncated, info = env.step(action)
 
-    state = observation
+        state = observation
 
-    if terminated or truncated:
-        env.reset()
-        break
+        if terminated or truncated:
+            env.reset()
+            break
+
+    # Check if we've reached our target performance
+    #if best_reward > 0.9:
+    #    break
