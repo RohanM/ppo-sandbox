@@ -6,44 +6,32 @@ from torch.nn import functional as F
 
 # Observations: Tensor[8]
 # Actions: Four discrete actions
-class ActorModel(nn.Module):
+class ActorModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32, num_output=4):
-        super().__init__()
-        self.linear1 = nn.Linear(num_input, num_hidden)
-        self.linear2 = nn.Linear(num_hidden, num_hidden)
-        self.linear3 = nn.Linear(num_hidden, num_output)
-        self.relu = nn.ReLU()
-        self.softmax = nn.Softmax(dim=0)
-
-    def forward(self, x: Tensor):
-        out = self.linear1(x)
-        out = self.relu(out)
-        out = self.linear2(out)
-        out = self.relu(out)
-        out = self.linear3(out)
-        out = self.softmax(out)
-        return out
+        layers = [
+            nn.Linear(num_input, num_hidden),
+            nn.ReLU(),
+            nn.Linear(num_hidden, num_hidden),
+            nn.ReLU(),
+            nn.Linear(num_hidden, num_output),
+            nn.Softmax(dim=0),
+        ]
+        super().__init__(*layers)
 
 
-class CriticModel(nn.Module):
+class CriticModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32):
-        super().__init__()
         num_output = 1
+        layers = [
+            nn.Linear(num_input, num_hidden),
+            nn.ReLU(),
+            nn.Linear(num_hidden, num_hidden),
+            nn.ReLU(),
+            nn.Linear(num_hidden, num_output),
+            nn.Tanh(),
+        ]
+        super().__init__(*layers)
 
-        self.linear1 = nn.Linear(num_input, num_hidden)
-        self.linear2 = nn.Linear(num_hidden, num_hidden)
-        self.linear3 = nn.Linear(num_hidden, num_output)
-        self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
-
-    def forward(self, x: Tensor):
-        out = self.linear1(x)
-        out = self.relu(out)
-        out = self.linear2(out)
-        out = self.relu(out)
-        out = self.linear3(out)
-        out = self.tanh(out)
-        return out
 
 def get_advantages(values, masks, rewards):
     lmbda = 0.95
