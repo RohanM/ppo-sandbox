@@ -56,8 +56,8 @@ def get_advantages(values, masks, rewards):
         gae = delta + gamma * lmbda * masks[i] * gae
         returns.insert(0, gae + values[i])
 
-    adv = np.array(returns) - values[:-1]
-    return returns, (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
+    adv = tensor(returns).unsqueeze(dim=1) - values[:-1]
+    return returns, (adv - adv.mean()) / (adv.std() + 1e-10)
 
 
 def ppo_loss(newpolicy_probs, oldpolicy_probs, advantages, rewards, values):
@@ -65,7 +65,7 @@ def ppo_loss(newpolicy_probs, oldpolicy_probs, advantages, rewards, values):
     critic_discount = 0.5
     entropy_beta = 0.001
 
-    advantages = tensor(advantages).unsqueeze(dim=1)
+    advantages = advantages.unsqueeze(dim=1)
     ratio = torch.exp(torch.log(newpolicy_probs + 1e-10) - torch.log(oldpolicy_probs + 1e-10)).detach()
     p1 = ratio * advantages
     p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
@@ -76,6 +76,9 @@ def ppo_loss(newpolicy_probs, oldpolicy_probs, advantages, rewards, values):
     )
     return total_loss
 
+
+def cat(a, b):
+    return torch.cat((a, b.float().unsqueeze(dim=0)))
 
 
 env = gym.make('LunarLander-v2', new_step_api=True, render_mode='human')
@@ -93,11 +96,11 @@ actor_opt = optim.Adam(actor.parameters(), lr=1e-4)
 critic_opt = optim.Adam(critic.parameters(), lr=1e-4)
 
 for episode in range(max_episodes):
-    states = []
+    states = tensor([])
     actions = []
-    values = []
+    values = tensor([])
     masks = []
-    rewards = []
+    rewards = tensor([])
     actions_probs = tensor([])
 
     state = env.reset()
@@ -112,12 +115,12 @@ for episode in range(max_episodes):
 
         mask = not (terminated or truncated)
 
-        states.append(state)
+        states = cat(states, state_input)
         actions.append(action)
-        values.append(q_value.item())
+        values = cat(values, q_value.detach())
         masks.append(mask)
-        rewards.append(reward)
-        actions_probs = torch.cat((actions_probs, action_dist.detach().unsqueeze(dim=0)), dim=0)
+        rewards = cat(rewards, tensor(reward).unsqueeze(dim=0))
+        actions_probs = cat(actions_probs, action_dist.detach())
 
         state = observation
 
@@ -126,22 +129,19 @@ for episode in range(max_episodes):
             break
 
 
-    q_value = critic(tensor(states[-1]))
-    values.append(q_value.item())
-    returns, advantages = get_advantages(values, masks, rewards)
+    q_value = critic(states[-1])
+    values = cat(values, q_value.detach())
 
-    rewards = tensor(rewards)
-    values = tensor(values)
-    returns = tensor(returns).float()
+    returns, advantages = get_advantages(values, masks, rewards)
+    returns = tensor(returns).float().unsqueeze(dim=1)
 
     # Training loop
     actor.train()
     critic.train()
-    states_input = tensor(states)
     for epoch in range(num_epochs):
         # One episode per batch - is this optimal?
-        actor_loss = ppo_loss(actor(states_input), actions_probs, advantages, rewards, values)
-        critic_loss = F.mse_loss(critic(states_input).squeeze(), returns)
+        actor_loss = ppo_loss(actor(states), actions_probs, advantages, rewards, values)
+        critic_loss = F.mse_loss(critic(states), returns)
 
         actor_loss.backward()
         critic_loss.backward()
