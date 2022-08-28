@@ -110,7 +110,6 @@ for episode in range(max_episodes):
 
         if terminated or truncated:
             env.reset()
-            break
 
     # Training loop
     actor.train()
