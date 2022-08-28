@@ -111,6 +111,8 @@ for episode in range(max_episodes):
         if terminated or truncated:
             env.reset()
 
+    print(f'{rewards.mean()}, {rewards.max()}')
+
     # Training loop
     actor.train()
     critic.train()
