@@ -4,6 +4,18 @@ import torch
 from torch import nn, tensor, Tensor, optim
 from torch.nn import functional as F
 
+ppo_steps = 4800
+max_episodes = 50
+num_epochs = 8
+
+lr = 0.005
+
+lmbda = 0.95
+gamma = 0.99
+epsilon = 0.2
+
+
+
 # Observations: Tensor[8]
 # Actions: Four discrete actions
 class ActorModel(nn.Sequential):
@@ -34,9 +46,6 @@ class CriticModel(nn.Sequential):
 
 
 def get_advantages(values, masks, rewards):
-    lmbda = 0.95
-    gamma = 0.99
-
     returns = []
     gae = 0
     for i in reversed(range(len(rewards))):
@@ -50,8 +59,6 @@ def get_advantages(values, masks, rewards):
 
 
 def ppo_loss(newpolicy_probs, oldpolicy_probs, advantages, rewards, values):
-    epsilon = 0.2
-
     advantages = advantages.unsqueeze(dim=1)
     ratio = torch.exp(torch.log(newpolicy_probs + 1e-10) - torch.log(oldpolicy_probs + 1e-10))
     p1 = ratio * advantages
@@ -70,15 +77,11 @@ env = gym.make('LunarLander-v2', new_step_api=True, render_mode='human')
 n_state = env.observation_space.shape[0]
 n_actions = env.action_space.n
 
-ppo_steps = 128
-max_episodes = 50
-num_epochs = 8
-
 actor = ActorModel(num_input=n_state, num_output=n_actions)
 critic = CriticModel(num_input=n_state)
 
-actor_opt = optim.Adam(actor.parameters(), lr=1e-4)
-critic_opt = optim.Adam(critic.parameters(), lr=1e-4)
+actor_opt = optim.Adam(actor.parameters(), lr=lr)
+critic_opt = optim.Adam(critic.parameters(), lr=lr)
 
 for episode in range(max_episodes):
     states = tensor([])
@@ -114,7 +117,6 @@ for episode in range(max_episodes):
     actor.train()
     critic.train()
     for epoch in range(num_epochs):
-        # One episode per batch - is this optimal?
         new_actions_probs = actor(states)
         values = critic(torch.cat((states, states[-1].unsqueeze(dim=0))))
         returns, advantages = get_advantages(values, masks, rewards)
