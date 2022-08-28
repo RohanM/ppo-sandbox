@@ -72,7 +72,7 @@ def cat(a, b):
     return torch.cat((a, b.float().unsqueeze(dim=0)))
 
 
-env = gym.make('LunarLander-v2', new_step_api=True, render_mode='human')
+env = gym.make('LunarLander-v2', new_step_api=True)
 n_state = env.observation_space.shape[0]
 n_actions = env.action_space.n
 
