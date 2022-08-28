@@ -26,7 +26,7 @@ class ActorModel(nn.Sequential):
             nn.Linear(num_hidden, num_hidden),
             nn.ReLU(),
             nn.Linear(num_hidden, num_output),
-            nn.Softmax(dim=0),
+            nn.Softmax(dim=1),
         ]
         super().__init__(*layers)
 
@@ -59,7 +59,6 @@ def get_advantages(values, masks, rewards):
 
 
 def ppo_loss(newpolicy_probs, oldpolicy_probs, advantages, rewards, values):
-    advantages = advantages.unsqueeze(dim=1)
     ratio = torch.exp(torch.log(newpolicy_probs + 1e-10) - torch.log(oldpolicy_probs + 1e-10))
     p1 = ratio * advantages
     p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
@@ -94,7 +93,7 @@ for episode in range(max_episodes):
 
     for i in range(ppo_steps):
         state_input = tensor(state)
-        action_dist = actor(state_input)
+        action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
         action = np.random.choice(n_actions, p=action_dist.detach().numpy())
 
         observation, reward, terminated, truncated, info = env.step(action)
