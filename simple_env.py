@@ -4,7 +4,7 @@ import numpy as np
 
 # A very simple environment that gives -1 reward for every step, but 20 reward
 # for a sequence of 5 identical steps.
-class SimpleEnv(gym.Env):
+class SimpleEnvV0(gym.Env):
     def __init__(self, render_mode=None):
         assert render_mode == None
         self.repeats_needed = 5
@@ -31,4 +31,34 @@ class SimpleEnv(gym.Env):
         return self.state, reward, self.done, info
 
 
-gym.envs.registration.register(id='SimpleEnv-v0', entry_point=SimpleEnv)
+# A "copy me" env - +1 for successful copy, -1 for fail, -10 for if score
+# drops below -50.
+class SimpleEnvV1(gym.Env):
+    def __init__(self, render_mode=None, size=5, fail_threshold=-50):
+        assert render_mode == None
+        self.size = size
+        self.fail_threshold = fail_threshold
+        self.observation_space = gym.spaces.Discrete(self.size)
+        self.action_space = gym.spaces.Discrete(self.size)
+
+    def reset(self, seed=None, return_info=None, options=None):
+        super().reset()
+        self.state = np.random.randint(self.size)
+        self.score = 0
+        self.done = False
+        return self.state
+
+    def step(self, action):
+        if action == self.state:
+            reward = 1
+        else:
+            reward = -1
+        self.score += reward
+        self.done = self.score < self.fail_threshold
+        info = { 'score': self.score }
+
+        return self.state, reward, self.done, info
+
+
+gym.envs.registration.register(id='SimpleEnv-v0', entry_point=SimpleEnvV0)
+gym.envs.registration.register(id='SimpleEnv-v1', entry_point=SimpleEnvV1)
