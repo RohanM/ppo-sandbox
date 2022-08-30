@@ -122,7 +122,7 @@ for episode in range(max_episodes):
         if terminated or truncated:
             env.reset()
 
-    print(f'{rewards.mean()}, {rewards.max()}')
+    print(f'{rewards.mean():.4f}, {rewards.max()}, {np.count_nonzero(actions)}')
 
     # Training loop
     actor.train()
@@ -141,6 +141,3 @@ for episode in range(max_episodes):
         critic_loss_v.backward()
         critic_opt.step()
         critic_opt.zero_grad()
-
-        if epoch == 7:
-            print(f'Episode: {episode}, actor loss: {actor_loss.item()}, critic loss: {critic_loss.item()}')
