@@ -58,14 +58,21 @@ def get_advantages(values, masks, rewards):
     return t_returns, (adv - adv.mean()) / (adv.std() + 1e-10)
 
 
-def ppo_loss(newpolicy_probs, oldpolicy_probs, advantages, rewards, values):
+def actor_loss(newpolicy_probs, oldpolicy_probs, advantages):
     ratio = torch.exp(torch.log(newpolicy_probs + 1e-10) - torch.log(oldpolicy_probs + 1e-10))
     p1 = ratio * advantages
     p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
     actor_loss = -torch.mean(torch.minimum(p1, p2))
-    critic_loss = F.mse_loss(values[:-1], rewards)
 
-    return actor_loss, critic_loss
+    # approx_kl = (torch.log(oldpolicy_probs) - torch.log(newpolicy_probs)).mean().item()
+    # clipped = ratio.gt(1+epsilon) | ratio.lt(1-epsilon)
+    # clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
+    # print(f'KL: {approx_kl:.4f}, clipfrac: {clipfrac:.4f}')
+
+    return actor_loss
+
+def critic_loss(values, rewards):
+    return F.mse_loss(values[:-1], rewards)
 
 
 def cat(a, b):
@@ -120,14 +127,14 @@ for episode in range(max_episodes):
         new_actions_probs = actor(states)
         values = critic(torch.cat((states, states[-1].unsqueeze(dim=0))))
         returns, advantages = get_advantages(values, masks, rewards)
+        actor_loss_v = actor_loss(new_actions_probs, actions_probs, advantages)
+        critic_loss_v = critic_loss(values, rewards)
 
-        actor_loss, critic_loss = ppo_loss(new_actions_probs, actions_probs, advantages, rewards, values)
-
-        actor_loss.backward(retain_graph=True)
+        actor_loss_v.backward(retain_graph=True)
         actor_opt.step()
         actor_opt.zero_grad()
 
-        critic_loss.backward()
+        critic_loss_v.backward()
         critic_opt.step()
         critic_opt.zero_grad()
 
