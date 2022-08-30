@@ -124,13 +124,15 @@ for episode in range(max_episodes):
 
     print(f'{rewards.mean():.4f}, {rewards.max()}, {np.count_nonzero(actions)}')
 
+    values = critic(torch.cat((states, states[-1].unsqueeze(dim=0)))).detach()
+    returns, advantages = get_advantages(values, masks, rewards)
+
     # Training loop
     actor.train()
     critic.train()
     for epoch in range(num_epochs):
         new_actions_probs = actor(states)
         values = critic(torch.cat((states, states[-1].unsqueeze(dim=0))))
-        returns, advantages = get_advantages(values, masks, rewards)
         actor_loss_v = actor_loss(new_actions_probs, actions_probs, advantages)
         critic_loss_v = critic_loss(values, rewards)
 
