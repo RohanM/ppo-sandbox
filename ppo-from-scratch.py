@@ -1,4 +1,5 @@
 import gym
+import simple_env
 import numpy as np
 import torch
 from torch import nn, tensor, Tensor, optim
@@ -15,9 +16,6 @@ gamma = 0.99
 epsilon = 0.2
 
 
-
-# Observations: Tensor[8]
-# Actions: Four discrete actions
 class ActorModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32, num_output=4):
         layers = [
@@ -79,8 +77,13 @@ def cat(a, b):
     return torch.cat((a, b.float().unsqueeze(dim=0)))
 
 
-env = gym.make('LunarLander-v2', new_step_api=True)
-n_state = env.observation_space.shape[0]
+#env = gym.make('LunarLander-v2', new_step_api=True)
+env = gym.make('SimpleEnv-v0', new_step_api=True)
+
+if isinstance(env.observation_space, gym.spaces.MultiDiscrete):
+    n_state = len(env.observation_space)
+else:
+    n_state = env.observation_space.shape[0]
 n_actions = env.action_space.n
 
 actor = ActorModel(num_input=n_state, num_output=n_actions)
@@ -99,7 +102,7 @@ for episode in range(max_episodes):
     state = env.reset()
 
     for i in range(ppo_steps):
-        state_input = tensor(state)
+        state_input = tensor(state).float()
         action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
         action = np.random.choice(n_actions, p=action_dist.detach().numpy())
 
