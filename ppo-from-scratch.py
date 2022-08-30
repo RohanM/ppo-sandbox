@@ -5,11 +5,12 @@ import torch
 from torch import nn, tensor, Tensor, optim
 from torch.nn import functional as F
 
-ppo_steps = 4800
-max_episodes = 50
-num_epochs = 8
+ppo_steps = 4000
+max_episodes = 100
+num_epochs = 10
 
-lr = 0.005
+actor_lr = 3e-4
+critic_lr = 1e-3
 
 lmbda = 0.95
 gamma = 0.99
@@ -89,8 +90,8 @@ n_actions = env.action_space.n
 actor = ActorModel(num_input=n_state, num_output=n_actions)
 critic = CriticModel(num_input=n_state)
 
-actor_opt = optim.Adam(actor.parameters(), lr=lr)
-critic_opt = optim.Adam(critic.parameters(), lr=lr)
+actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
+critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
 
 for episode in range(max_episodes):
     states = tensor([])
