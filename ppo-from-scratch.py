@@ -16,7 +16,6 @@ critic_lr = 1e-3
 lmbda = 0.95
 gamma = 0.99
 epsilon = 0.2
-entropy_coeff = 0
 
 writer = SummaryWriter()
 
@@ -64,8 +63,7 @@ def actor_loss(newpolicy_probs, oldpolicy_probs, advantages):
     ratio = torch.exp(torch.log(newpolicy_probs + 1e-10) - torch.log(oldpolicy_probs + 1e-10))
     p1 = ratio * advantages
     p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
-    entropy = entropy_coeff * (newpolicy_probs * torch.log(newpolicy_probs + 1e-10)).mean()
-    actor_loss = -torch.min(p1, p2).mean() - entropy
+    actor_loss = -torch.min(p1, p2).mean()
 
     approx_kl = (torch.log(oldpolicy_probs) - torch.log(newpolicy_probs)).mean().item()
     clipped = ratio.gt(1+epsilon) | ratio.lt(1-epsilon)
