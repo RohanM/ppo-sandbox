@@ -59,16 +59,15 @@ def get_advantages(values, masks, rewards):
     return t_returns, (adv - adv.mean()) / (adv.std() + 1e-10)
 
 
-def actor_loss(newpolicy_probs, oldpolicy_probs, advantages):
-    ratio = torch.exp(torch.log(newpolicy_probs + 1e-10) - torch.log(oldpolicy_probs + 1e-10))
+def actor_loss(newpolicy_logp, oldpolicy_logp, advantages):
+    ratio = torch.exp(newpolicy_logp - oldpolicy_logp)
     p1 = ratio * advantages
     p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
     actor_loss = -torch.min(p1, p2).mean()
 
-    approx_kl = (torch.log(oldpolicy_probs) - torch.log(newpolicy_probs)).mean().item()
+    approx_kl = (oldpolicy_logp - newpolicy_logp).mean().item()
     clipped = ratio.gt(1+epsilon) | ratio.lt(1-epsilon)
     clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
-    # print(f'KL: {approx_kl:.4f}, clipfrac: {clipfrac:.4f}')
 
     return actor_loss, { 'approx_kl': approx_kl, 'clipfrac': clipfrac }
 
@@ -100,24 +99,27 @@ for episode in range(max_episodes):
     actions = []
     masks = []
     rewards = tensor([])
-    actions_probs = tensor([])
+    actions_logps = tensor([])
 
     state = env.reset()
 
     for i in range(ppo_steps):
         state_input = tensor(state).float()
         action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
-        action = np.random.choice(n_actions, p=action_dist.detach().numpy())
 
-        observation, reward, terminated, truncated, info = env.step(action)
+        dist = torch.distributions.Categorical(probs=action_dist)
+        action = dist.sample()
+        action_logp = dist.log_prob(action) # The log prob of the action we took
+
+        observation, reward, terminated, truncated, info = env.step(action.detach().data.numpy())
 
         mask = not (terminated or truncated)
 
         states = cat(states, state_input)
         actions.append(action)
+        actions_logps = cat(actions_logps, action_logp.detach())
         masks.append(mask)
         rewards = cat(rewards, tensor(reward).unsqueeze(dim=0))
-        actions_probs = cat(actions_probs, action_dist.detach())
 
         state = observation
 
@@ -139,9 +141,12 @@ for episode in range(max_episodes):
     actor.train()
     critic.train()
     for epoch in range(num_epochs):
-        new_actions_probs = actor(states)
+        new_actions_dists = actor(states)
+        dist = torch.distributions.Categorical(probs=new_actions_dists)
+        new_actions_logps = dist.log_prob(tensor(actions)).unsqueeze(dim=1)
+
         values = critic(torch.cat((states, states[-1].unsqueeze(dim=0))))
-        actor_loss_v, actor_loss_info = actor_loss(new_actions_probs, actions_probs, advantages)
+        actor_loss_v, actor_loss_info = actor_loss(new_actions_logps, actions_logps, advantages)
         critic_loss_v = critic_loss(values, rewards)
 
         actor_loss_v.backward(retain_graph=True)
