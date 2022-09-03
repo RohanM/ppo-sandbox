@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch import nn, tensor, Tensor, optim
 from torch.nn import functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 ppo_steps = 4000
 max_episodes = 100
@@ -17,6 +18,7 @@ gamma = 0.99
 epsilon = 0.2
 entropy_coeff = 0
 
+writer = SummaryWriter()
 
 class ActorModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32, num_output=4):
@@ -65,12 +67,12 @@ def actor_loss(newpolicy_probs, oldpolicy_probs, advantages):
     entropy = entropy_coeff * (newpolicy_probs * torch.log(newpolicy_probs + 1e-10)).mean()
     actor_loss = -torch.min(p1, p2).mean() - entropy
 
-    # approx_kl = (torch.log(oldpolicy_probs) - torch.log(newpolicy_probs)).mean().item()
-    # clipped = ratio.gt(1+epsilon) | ratio.lt(1-epsilon)
-    # clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
+    approx_kl = (torch.log(oldpolicy_probs) - torch.log(newpolicy_probs)).mean().item()
+    clipped = ratio.gt(1+epsilon) | ratio.lt(1-epsilon)
+    clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
     # print(f'KL: {approx_kl:.4f}, clipfrac: {clipfrac:.4f}')
 
-    return actor_loss
+    return actor_loss, { 'approx_kl': approx_kl, 'clipfrac': clipfrac }
 
 def critic_loss(values, rewards):
     return F.mse_loss(values[:-1], rewards)
@@ -124,7 +126,13 @@ for episode in range(max_episodes):
         if terminated or truncated:
             env.reset()
 
-    print(f'{rewards.mean():.4f}, {rewards.max()}, {np.count_nonzero(actions)}')
+    num_eps = np.count_nonzero(masks)
+    avg_reward = rewards.sum().item() / num_eps
+    print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
+
+    writer.add_scalar('avg reward', avg_reward, episode)
+    writer.add_scalar('max reward', rewards.max().item(), episode)
+    writer.add_scalar('avg episode length', ppo_steps / num_eps, episode)
 
     values = critic(torch.cat((states, states[-1].unsqueeze(dim=0)))).detach()
     returns, advantages = get_advantages(values, masks, rewards)
@@ -135,13 +143,28 @@ for episode in range(max_episodes):
     for epoch in range(num_epochs):
         new_actions_probs = actor(states)
         values = critic(torch.cat((states, states[-1].unsqueeze(dim=0))))
-        actor_loss_v = actor_loss(new_actions_probs, actions_probs, advantages)
+        actor_loss_v, actor_loss_info = actor_loss(new_actions_probs, actions_probs, advantages)
         critic_loss_v = critic_loss(values, rewards)
 
         actor_loss_v.backward(retain_graph=True)
+        writer.add_histogram(
+            "gradients/actor",
+            torch.cat([p.grad.view(-1) for p in actor.parameters()]),
+            episode
+        )
         actor_opt.step()
         actor_opt.zero_grad()
 
         critic_loss_v.backward()
+        writer.add_histogram(
+            "gradients/critic",
+            torch.cat([p.grad.view(-1) for p in critic.parameters()]),
+            episode
+        )
         critic_opt.step()
         critic_opt.zero_grad()
+
+    writer.add_scalar('actor loss', actor_loss_v.item(), episode)
+    writer.add_scalar('critic loss', critic_loss_v.item(), episode)
+    writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
+    writer.add_scalar('actor clipfrac', actor_loss_info['clipfrac'], episode)
