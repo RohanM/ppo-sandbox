@@ -11,6 +11,7 @@ numpy = "^1.23.2"
 gym = {extras = ["box2d"], version = "^0.25.2"}
 torch = "^1.12.1"
 tensorboard = "^2.10.0"
+pytest-watch = "^4.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.2"
