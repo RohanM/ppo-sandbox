@@ -130,82 +130,83 @@ critic = CriticModel(num_input=n_state)
 actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
 critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
 
-for episode in range(max_episodes):
-    buf = RolloutBuffer()
+if __name__ == '__main__':
+    for episode in range(max_episodes):
+        buf = RolloutBuffer()
 
-    state = env.reset()
+        state = env.reset()
 
-    for i in range(ppo_steps):
-        state_input = tensor(state).float()
-        action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
+        for i in range(ppo_steps):
+            state_input = tensor(state).float()
+            action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
 
-        dist = torch.distributions.Categorical(probs=action_dist)
-        action = dist.sample()
-        action_logp = dist.log_prob(action) # The log prob of the action we took
+            dist = torch.distributions.Categorical(probs=action_dist)
+            action = dist.sample()
+            action_logp = dist.log_prob(action) # The log prob of the action we took
 
-        observation, reward, terminated, truncated, info = env.step(action.detach().data.numpy())
+            observation, reward, terminated, truncated, info = env.step(action.detach().data.numpy())
 
-        mask = not (terminated or truncated)
+            mask = not (terminated or truncated)
 
-        buf.add_obs(state_input, action, action_logp, mask, reward)
+            buf.add_obs(state_input, action, action_logp, mask, reward)
 
-        state = observation
+            state = observation
 
-        if terminated or truncated:
-            env.reset()
+            if terminated or truncated:
+                env.reset()
 
-    states = buf.get_states()
-    states_extended = buf.get_states(extended=True)
-    actions_logps = buf.get_actions_logps()
-    masks = buf.get_masks()
-    values = critic(states_extended)
-    rewards = buf.get_rewards()
-    returns = buf.get_returns(values)
-    advantages = buf.get_advantages(returns, values)
-
-    num_eps = np.count_nonzero(masks)
-    avg_reward = rewards.sum().item() / num_eps
-    print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
-
-    writer.add_scalar('avg reward', avg_reward, episode)
-    writer.add_scalar('max reward', rewards.max().item(), episode)
-    writer.add_scalar('avg episode length', ppo_steps / num_eps, episode)
-
-    # Training loop
-    actor.train()
-    critic.train()
-    for epoch in range(num_epochs):
-        new_actions_dists = actor(states)
-        dist = torch.distributions.Categorical(probs=new_actions_dists)
-        new_actions_logps = dist.log_prob(buf.get_actions())
-
+        states = buf.get_states()
+        states_extended = buf.get_states(extended=True)
+        actions_logps = buf.get_actions_logps()
+        masks = buf.get_masks()
         values = critic(states_extended)
-        actor_loss_v, actor_loss_info = actor_loss(
-            new_actions_logps,
-            actions_logps.detach(),
-            advantages.detach()
-        )
-        critic_loss_v = critic_loss(values, rewards)
+        rewards = buf.get_rewards()
+        returns = buf.get_returns(values)
+        advantages = buf.get_advantages(returns, values)
 
-        actor_loss_v.backward(retain_graph=True)
-        writer.add_histogram(
-            "gradients/actor",
-            torch.cat([p.grad.view(-1) for p in actor.parameters()]),
-            episode
-        )
-        actor_opt.step()
-        actor_opt.zero_grad()
+        num_eps = np.count_nonzero(masks)
+        avg_reward = rewards.sum().item() / num_eps
+        print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
 
-        critic_loss_v.backward()
-        writer.add_histogram(
-            "gradients/critic",
-            torch.cat([p.grad.view(-1) for p in critic.parameters()]),
-            episode
-        )
-        critic_opt.step()
-        critic_opt.zero_grad()
+        writer.add_scalar('avg reward', avg_reward, episode)
+        writer.add_scalar('max reward', rewards.max().item(), episode)
+        writer.add_scalar('avg episode length', ppo_steps / num_eps, episode)
 
-    writer.add_scalar('actor loss', actor_loss_v.item(), episode)
-    writer.add_scalar('critic loss', critic_loss_v.item(), episode)
-    writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
-    writer.add_scalar('actor clipfrac', actor_loss_info['clipfrac'], episode)
+        # Training loop
+        actor.train()
+        critic.train()
+        for epoch in range(num_epochs):
+            new_actions_dists = actor(states)
+            dist = torch.distributions.Categorical(probs=new_actions_dists)
+            new_actions_logps = dist.log_prob(buf.get_actions())
+
+            values = critic(states_extended)
+            actor_loss_v, actor_loss_info = actor_loss(
+                new_actions_logps,
+                actions_logps.detach(),
+                advantages.detach()
+            )
+            critic_loss_v = critic_loss(values, rewards)
+
+            actor_loss_v.backward(retain_graph=True)
+            writer.add_histogram(
+                "gradients/actor",
+                torch.cat([p.grad.view(-1) for p in actor.parameters()]),
+                episode
+            )
+            actor_opt.step()
+            actor_opt.zero_grad()
+
+            critic_loss_v.backward()
+            writer.add_histogram(
+                "gradients/critic",
+                torch.cat([p.grad.view(-1) for p in critic.parameters()]),
+                episode
+            )
+            critic_opt.step()
+            critic_opt.zero_grad()
+
+            writer.add_scalar('actor loss', actor_loss_v.item(), episode)
+            writer.add_scalar('critic loss', critic_loss_v.item(), episode)
+            writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
+            writer.add_scalar('actor clipfrac', actor_loss_info['clipfrac'], episode)
