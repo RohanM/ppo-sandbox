@@ -115,8 +115,8 @@ def cat(a, b):
     return torch.cat((a, b.float().unsqueeze(dim=0)))
 
 
-#env = gym.make('LunarLander-v2', new_step_api=True)
-env = gym.make('SimpleEnv-v0', new_step_api=True)
+
+env = gym.make('CartPole-v1', new_step_api=True)
 
 if isinstance(env.observation_space, gym.spaces.MultiDiscrete):
     n_state = len(env.observation_space)
