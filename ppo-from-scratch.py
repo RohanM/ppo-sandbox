@@ -46,17 +46,53 @@ class CriticModel(nn.Sequential):
         super().__init__(*layers)
 
 
-def get_advantages(values, masks, rewards):
-    returns = []
-    gae = 0
-    for i in reversed(range(len(rewards))):
-        delta = rewards[i] + gamma * values[i + 1] * masks[i] - values[i]
-        gae = delta + gamma * lmbda * masks[i] * gae
-        returns.insert(0, gae + values[i])
-    t_returns = torch.cat(returns).float().unsqueeze(dim=1)
+class RolloutBuffer:
+    def __init__(self):
+        self.reset()
 
-    adv = t_returns - values[:-1]
-    return t_returns, (adv - adv.mean()) / (adv.std() + 1e-10)
+    def reset(self):
+        self.states = []
+        self.actions = []
+        self.actions_logps = []
+        self.masks = []
+        self.rewards = []
+
+    def add_obs(self, state, action, action_logp, mask, reward):
+        self.states.append(state)
+        self.actions.append(action)
+        self.actions_logps.append(action_logp)
+        self.masks.append(mask)
+        self.rewards.append(reward)
+
+    def get_states(self, extended: bool = False):
+        states = self.states + self.states[-1:] if extended else self.states
+        return torch.stack(states)
+
+    def get_actions(self):
+        return torch.tensor(self.actions).unsqueeze(1)
+
+    def get_actions_logps(self):
+        return torch.stack(self.actions_logps).unsqueeze(1)
+
+    def get_masks(self):
+        return self.masks
+
+    def get_rewards(self):
+        return tensor(self.rewards).unsqueeze(1)
+
+    def get_returns(self, values):
+        returns = []
+        gae = 0
+        for i in reversed(range(len(self.rewards))):
+            delta = self.rewards[i] + gamma * values[i + 1] * self.masks[i] - values[i]
+            gae = delta + gamma * lmbda * self.masks[i] * gae
+            returns.insert(0, gae + values[i])
+        returns_t = torch.cat(returns).float().unsqueeze(dim=1)
+        return returns_t
+
+    def get_advantages(self, returns, values):
+        adv = returns - values[:-1]
+        return (adv - adv.mean()) / (adv.std() + 1e-10)
 
 
 def actor_loss(newpolicy_logp, oldpolicy_logp, advantages):
@@ -95,11 +131,7 @@ actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
 critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
 
 for episode in range(max_episodes):
-    states = []
-    actions = []
-    masks = []
-    rewards = []
-    actions_logps = []
+    buf = RolloutBuffer()
 
     state = env.reset()
 
@@ -115,47 +147,45 @@ for episode in range(max_episodes):
 
         mask = not (terminated or truncated)
 
-        states.append(state_input)
-        actions.append(action)
-        actions_logps.append(action_logp)
-        masks.append(mask)
-        rewards.append(reward)
+        buf.add_obs(state_input, action, action_logp, mask, reward)
 
         state = observation
 
         if terminated or truncated:
             env.reset()
 
-    states_t = torch.stack(states)
-    states_extended_t = torch.stack(states + states[-1:])
-    actions_logps_t = torch.stack(actions_logps).unsqueeze(1)
-    values = critic(states_extended_t).detach()
-    rewards_t = torch.tensor(rewards).unsqueeze(1)
-    returns, advantages = get_advantages(values, masks, rewards)
+    states = buf.get_states()
+    states_extended = buf.get_states(extended=True)
+    actions_logps = buf.get_actions_logps()
+    masks = buf.get_masks()
+    values = critic(states_extended)
+    rewards = buf.get_rewards()
+    returns = buf.get_returns(values)
+    advantages = buf.get_advantages(returns, values)
 
     num_eps = np.count_nonzero(masks)
-    avg_reward = rewards_t.sum().item() / num_eps
-    print(f'{rewards_t.mean():.4f}, {rewards_t.max()}, {num_eps}, {avg_reward:.4f}')
+    avg_reward = rewards.sum().item() / num_eps
+    print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
 
     writer.add_scalar('avg reward', avg_reward, episode)
-    writer.add_scalar('max reward', rewards_t.max().item(), episode)
+    writer.add_scalar('max reward', rewards.max().item(), episode)
     writer.add_scalar('avg episode length', ppo_steps / num_eps, episode)
 
     # Training loop
     actor.train()
     critic.train()
     for epoch in range(num_epochs):
-        new_actions_dists = actor(states_t)
+        new_actions_dists = actor(states)
         dist = torch.distributions.Categorical(probs=new_actions_dists)
-        new_actions_logps = dist.log_prob(tensor(actions)).unsqueeze(dim=1)
+        new_actions_logps = dist.log_prob(buf.get_actions())
 
-        values = critic(states_extended_t)
+        values = critic(states_extended)
         actor_loss_v, actor_loss_info = actor_loss(
             new_actions_logps,
-            actions_logps_t.detach(),
+            actions_logps.detach(),
             advantages.detach()
         )
-        critic_loss_v = critic_loss(values, rewards_t)
+        critic_loss_v = critic_loss(values, rewards)
 
         actor_loss_v.backward(retain_graph=True)
         writer.add_histogram(
