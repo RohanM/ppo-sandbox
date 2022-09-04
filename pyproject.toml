@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ppo-sandbox"
-version = "0.1.0"
+version = "0.2.0"
 description = "PPO RL Sandbox"
 authors = ["Rohan Mitchell <rohan@rohanmitchell.com>"]
 license = "MIT"
