@@ -157,10 +157,6 @@ class Trainer:
             self.critic_opt.step()
             self.critic_opt.zero_grad()
 
-            self.writer.add_histogram("loss/advantages", advantages, episode)
-            self.writer.add_histogram("loss/values", values, episode)
-            self.writer.add_histogram("loss/returns", returns, episode)
-
             self.writer.add_scalar('actor loss', actor_loss_v.item(), episode)
             self.writer.add_scalar('critic loss', critic_loss_v.item(), episode)
             self.writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
@@ -235,6 +231,10 @@ if __name__ == '__main__':
         num_eps = rollout_steps - np.count_nonzero(masks)
         avg_reward = rewards.sum().item() / num_eps
         print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
+
+        writer.add_histogram("loss/advantages", advantages, episode)
+        writer.add_histogram("loss/values", values, episode)
+        writer.add_histogram("loss/returns", returns, episode)
 
         writer.add_scalar('avg reward', avg_reward, episode)
         writer.add_scalar('max reward', rewards.max().item(), episode)
