@@ -78,19 +78,28 @@ class RolloutBuffer:
     def get_rewards(self):
         return tensor(self.rewards).unsqueeze(1)
 
-    def get_returns(self, values):
-        returns = []
-        gae = 0
-        for i in reversed(range(len(self.rewards))):
-            delta = self.rewards[i] + gamma * values[i + 1] * self.masks[i] - values[i]
-            gae = delta + gamma * lmbda * self.masks[i] * gae
-            returns.insert(0, gae + values[i])
-        returns_t = torch.cat(returns).float().unsqueeze(dim=1)
-        return returns_t
+    def get_returns(self):
+        batch_size = len(self.rewards)
+        returns = torch.zeros(batch_size)
 
-    def get_advantages(self, returns, values):
-        adv = returns - values[:-1]
-        return (adv - adv.mean()) / (adv.std() + 1e-10)
+        for t in reversed(range(batch_size)):
+            next_return = returns[t+1] if t < batch_size-1 else 0
+            returns[t] = self.rewards[t] + (next_return * self.masks[t])
+
+        return returns.unsqueeze(dim=1)
+
+    def get_advantages(self, values, gamma=0.99, lmbda=0.95):
+        batch_size = len(self.rewards)
+        advantages = torch.zeros(batch_size)
+
+        for t in reversed(range(batch_size)):
+            next_value = values[t + 1] if t < batch_size-1 else values[t]
+            next_advantage = advantages[t + 1] if t < batch_size-1 else advantages[t]
+
+            delta = self.rewards[t] + (gamma * next_value * self.masks[t]) - values[t]
+            advantages[t] = delta + (gamma * lmbda * next_advantage * self.masks[t])
+
+        return advantages.unsqueeze(dim=1)
 
 
 def actor_loss(newpolicy_logp, oldpolicy_logp, advantages):
@@ -112,7 +121,8 @@ def critic_loss(values, rewards):
 def cat(a, b):
     return torch.cat((a, b.float().unsqueeze(dim=0)))
 
-
+def normalise(t: Tensor) -> Tensor:
+    return (t - t.mean()) / (t.std() + 1e-10)
 
 env = gym.make('CartPole-v1', new_step_api=True)
 
@@ -171,8 +181,8 @@ if __name__ == '__main__':
         masks = buf.get_masks()
         values = critic(states_extended)
         rewards = buf.get_rewards()
-        returns = buf.get_returns(values)
-        advantages = buf.get_advantages(returns, values)
+        returns = buf.get_returns()
+        advantages = normalise(buf.get_advantages(values))
 
         num_eps = ppo_steps - np.count_nonzero(masks)
         avg_reward = rewards.sum().item() / num_eps
