@@ -6,9 +6,9 @@ from torch import nn, tensor, Tensor, optim
 from torch.nn import functional as F
 from torch.utils.tensorboard import SummaryWriter
 
-ppo_steps = 4000
 max_episodes = 100
 num_epochs = 10
+rollout_steps = 4000
 
 actor_lr = 3e-4
 critic_lr = 1e-3
@@ -137,7 +137,7 @@ critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
 if __name__ == '__main__':
     writer = SummaryWriter()
     writer.add_hparams({
-        'rollout_steps': ppo_steps,
+        'rollout_steps': rollout_steps,
         'max_episodes': max_episodes,
         'num_epochs': num_epochs,
         'actor_lr': actor_lr,
@@ -152,7 +152,7 @@ if __name__ == '__main__':
 
         state = env.reset()
 
-        for i in range(ppo_steps):
+        for i in range(rollout_steps):
             state_input = tensor(state).float()
             action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
 
@@ -179,13 +179,13 @@ if __name__ == '__main__':
         returns = buf.get_returns()
         advantages = normalise(buf.get_advantages(values))
 
-        num_eps = ppo_steps - np.count_nonzero(masks)
+        num_eps = rollout_steps - np.count_nonzero(masks)
         avg_reward = rewards.sum().item() / num_eps
         print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
 
         writer.add_scalar('avg reward', avg_reward, episode)
         writer.add_scalar('max reward', rewards.max().item(), episode)
-        writer.add_scalar('avg episode length', ppo_steps / num_eps, episode)
+        writer.add_scalar('avg episode length', rollout_steps / num_eps, episode)
 
         # Training loop
         actor.train()
