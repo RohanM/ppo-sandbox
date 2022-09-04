@@ -101,17 +101,70 @@ class RolloutBuffer:
         return advantages.unsqueeze(dim=1)
 
 
-def actor_loss(newpolicy_logp, oldpolicy_logp, advantages):
-    ratio = torch.exp(newpolicy_logp - oldpolicy_logp)
-    p1 = ratio * advantages
-    p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
-    actor_loss = -torch.min(p1, p2).mean()
+class Trainer:
+    def __init__(self, actor, critic, writer: SummaryWriter):
+        self.actor = actor
+        self.critic = critic
+        self.actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
+        self.critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
+        self.writer = writer
 
-    approx_kl = (oldpolicy_logp - newpolicy_logp).mean().item()
-    clipped = ratio.gt(1+epsilon) | ratio.lt(1-epsilon)
-    clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
 
-    return actor_loss, { 'approx_kl': approx_kl, 'clipfrac': clipfrac }
+    def actor_loss(self, newpolicy_logp, oldpolicy_logp, advantages):
+        ratio = torch.exp(newpolicy_logp - oldpolicy_logp)
+        p1 = ratio * advantages
+        p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
+        actor_loss = -torch.min(p1, p2).mean()
+
+        approx_kl = (oldpolicy_logp - newpolicy_logp).mean().item()
+        clipped = ratio.gt(1+epsilon) | ratio.lt(1-epsilon)
+        clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
+
+        return actor_loss, { 'approx_kl': approx_kl, 'clipfrac': clipfrac }
+
+
+    def train(self, num_epochs: int, buf: RolloutBuffer):
+        self.actor.train()
+        self.critic.train()
+        for epoch in range(num_epochs):
+            new_actions_dists = self.actor(states)
+            dist = torch.distributions.Categorical(probs=new_actions_dists)
+            new_actions_logps = dist.log_prob(buf.get_actions())
+            values = self.critic(states)
+
+            actor_loss_v, actor_loss_info = self.actor_loss(
+                new_actions_logps,
+                actions_logps.detach(),
+                advantages.detach()
+            )
+            critic_loss_v = F.mse_loss(values, returns)
+
+            actor_loss_v.backward(retain_graph=True)
+            self.writer.add_histogram(
+                "gradients/actor",
+                torch.cat([p.grad.view(-1) for p in actor.parameters()]),
+                episode
+            )
+            self.actor_opt.step()
+            self.actor_opt.zero_grad()
+
+            critic_loss_v.backward()
+            self.writer.add_histogram(
+                "gradients/critic",
+                torch.cat([p.grad.view(-1) for p in critic.parameters()]),
+                episode
+            )
+            self.critic_opt.step()
+            self.critic_opt.zero_grad()
+
+            self.writer.add_histogram("loss/advantages", advantages, episode)
+            self.writer.add_histogram("loss/values", values, episode)
+            self.writer.add_histogram("loss/returns", returns, episode)
+
+            self.writer.add_scalar('actor loss', actor_loss_v.item(), episode)
+            self.writer.add_scalar('critic loss', critic_loss_v.item(), episode)
+            self.writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
+            self.writer.add_scalar('actor clipfrac', actor_loss_info['clipfrac'], episode)
 
 
 def cat(a, b):
@@ -131,8 +184,6 @@ n_actions = env.action_space.n
 actor = ActorModel(num_input=n_state, num_output=n_actions)
 critic = CriticModel(num_input=n_state)
 
-actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
-critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
 
 if __name__ == '__main__':
     writer = SummaryWriter()
@@ -146,6 +197,8 @@ if __name__ == '__main__':
         'gamma': gamma,
         'epsilon': epsilon,
     }, {})
+
+    trainer = Trainer(actor, critic, writer)
 
     for episode in range(max_episodes):
         buf = RolloutBuffer()
@@ -187,45 +240,4 @@ if __name__ == '__main__':
         writer.add_scalar('max reward', rewards.max().item(), episode)
         writer.add_scalar('avg episode length', rollout_steps / num_eps, episode)
 
-        # Training loop
-        actor.train()
-        critic.train()
-        for epoch in range(num_epochs):
-            new_actions_dists = actor(states)
-            dist = torch.distributions.Categorical(probs=new_actions_dists)
-            new_actions_logps = dist.log_prob(buf.get_actions())
-            values = critic(states)
-
-            actor_loss_v, actor_loss_info = actor_loss(
-                new_actions_logps,
-                actions_logps.detach(),
-                advantages.detach()
-            )
-            critic_loss_v = F.mse_loss(values, returns)
-
-            actor_loss_v.backward(retain_graph=True)
-            writer.add_histogram(
-                "gradients/actor",
-                torch.cat([p.grad.view(-1) for p in actor.parameters()]),
-                episode
-            )
-            actor_opt.step()
-            actor_opt.zero_grad()
-
-            critic_loss_v.backward()
-            writer.add_histogram(
-                "gradients/critic",
-                torch.cat([p.grad.view(-1) for p in critic.parameters()]),
-                episode
-            )
-            critic_opt.step()
-            critic_opt.zero_grad()
-
-            writer.add_histogram("loss/advantages", advantages, episode)
-            writer.add_histogram("loss/values", values, episode)
-            writer.add_histogram("loss/returns", returns, episode)
-
-            writer.add_scalar('actor loss', actor_loss_v.item(), episode)
-            writer.add_scalar('critic loss', critic_loss_v.item(), episode)
-            writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
-            writer.add_scalar('actor clipfrac', actor_loss_info['clipfrac'], episode)
+        trainer.train(num_epochs, buf)
