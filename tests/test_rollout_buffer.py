@@ -59,4 +59,22 @@ def test_build_advantages(buf):
     expected = tensor([[2.68], [1.08], [-1.00], [2.03], [0.60]])
     assert torch.isclose(advantages, expected, atol=0.01).all()
 
+def test_dataset_len(buf):
+    buf.build_returns()
+    buf.build_advantages(tensor([0, 1, 2, 3, 4]), gamma=0.9, lmbda=0.8)
+    assert len(buf) == 5
+
+def test_dataset_getitem(buf):
+    buf.build_returns()
+    buf.build_advantages(tensor([0, 1, 2, 3, 4]), gamma=0.9, lmbda=0.8)
+    data = buf[0]
+    assert len(data) == 7
+    assert torch.equal(data[0], tensor([1, 2, 3]))
+    assert data[1] == 1
+    assert torch.equal(data[2], tensor(0.5000))
+    assert data[3] == True
+    assert data[4] == 1
+    assert torch.equal(data[5], tensor([3.]))
+    assert torch.equal(data[6], tensor([2.6776]))
+
 # Check expected values for advantages against equations

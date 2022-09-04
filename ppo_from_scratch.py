@@ -43,7 +43,7 @@ class CriticModel(nn.Sequential):
         super().__init__(*layers)
 
 
-class RolloutBuffer:
+class RolloutBuffer(Dataset):
     def __init__(self):
         self.reset()
 
@@ -108,6 +108,20 @@ class RolloutBuffer:
             advantages[t] = delta + (gamma * lmbda * next_advantage * self.masks[t])
 
         self.advantages = advantages.unsqueeze(dim=1)
+
+    def __len__(self):
+        return len(self.states)
+
+    def __getitem__(self, idx):
+        return (
+            self.states[idx],
+            self.actions[idx],
+            self.actions_logps[idx],
+            self.masks[idx],
+            self.rewards[idx],
+            self.returns[idx],
+            self.advantages[idx],
+        )
 
 
 class Trainer:
