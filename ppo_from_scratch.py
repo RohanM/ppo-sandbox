@@ -17,8 +17,6 @@ lmbda = 0.95
 gamma = 0.99
 epsilon = 0.2
 
-writer = SummaryWriter()
-
 class ActorModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32, num_output=4):
         layers = [
@@ -131,6 +129,18 @@ actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
 critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
 
 if __name__ == '__main__':
+    writer = SummaryWriter()
+    writer.add_hparams({
+        'rollout_steps': ppo_steps,
+        'max_episodes': max_episodes,
+        'num_epochs': num_epochs,
+        'actor_lr': actor_lr,
+        'critic_lr': critic_lr,
+        'lmbda': lmbda,
+        'gamma': gamma,
+        'epsilon': epsilon,
+    }, {})
+
     for episode in range(max_episodes):
         buf = RolloutBuffer()
 
@@ -205,6 +215,10 @@ if __name__ == '__main__':
             )
             critic_opt.step()
             critic_opt.zero_grad()
+
+            writer.add_histogram("loss/advantages", advantages, episode)
+            writer.add_histogram("loss/values", values, episode)
+            writer.add_histogram("loss/returns", returns, episode)
 
             writer.add_scalar('actor loss', actor_loss_v.item(), episode)
             writer.add_scalar('critic loss', critic_loss_v.item(), episode)
