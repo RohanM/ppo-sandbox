@@ -4,11 +4,12 @@ import numpy as np
 import torch
 from torch import nn, tensor, Tensor, optim
 from torch.nn import functional as F
+from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-max_episodes = 100
-num_epochs = 10
-rollout_steps = 4000
+rollout_steps = 500
+max_episodes = 400
+num_epochs = 4
 
 actor_lr = 3e-4
 critic_lr = 1e-3
@@ -147,43 +148,45 @@ class Trainer:
 
 
     def train(self, num_epochs: int, buf: RolloutBuffer):
+        data_loader = DataLoader(buf, batch_size=64, shuffle=True)
         self.actor.train()
         self.critic.train()
         for epoch in range(num_epochs):
-            new_actions_dists = self.actor(states)
-            dist = torch.distributions.Categorical(probs=new_actions_dists)
-            new_actions_logps = dist.log_prob(buf.get_actions())
-            values = self.critic(states)
+            for states, actions, actions_logps, _, _, returns, advantages in data_loader:
+                new_actions_dists = self.actor(states)
+                dist = torch.distributions.Categorical(probs=new_actions_dists)
+                new_actions_logps = dist.log_prob(actions)
+                values = self.critic(states)
 
-            actor_loss_v, actor_loss_info = self.actor_loss(
-                new_actions_logps,
-                actions_logps.detach(),
-                advantages.detach()
-            )
-            critic_loss_v = F.mse_loss(values, returns)
+                actor_loss_v, actor_loss_info = self.actor_loss(
+                    new_actions_logps,
+                    actions_logps.detach(),
+                    advantages.detach()
+                )
+                critic_loss_v = F.mse_loss(values, returns)
 
-            actor_loss_v.backward(retain_graph=True)
-            self.writer.add_histogram(
-                "gradients/actor",
-                torch.cat([p.grad.view(-1) for p in actor.parameters()]),
-                episode
-            )
-            self.actor_opt.step()
-            self.actor_opt.zero_grad()
+                actor_loss_v.backward(retain_graph=True)
+                self.writer.add_histogram(
+                    "gradients/actor",
+                    torch.cat([p.grad.view(-1) for p in actor.parameters()]),
+                    episode
+                )
+                self.actor_opt.step()
+                self.actor_opt.zero_grad()
 
-            critic_loss_v.backward()
-            self.writer.add_histogram(
-                "gradients/critic",
-                torch.cat([p.grad.view(-1) for p in critic.parameters()]),
-                episode
-            )
-            self.critic_opt.step()
-            self.critic_opt.zero_grad()
+                critic_loss_v.backward()
+                self.writer.add_histogram(
+                    "gradients/critic",
+                    torch.cat([p.grad.view(-1) for p in critic.parameters()]),
+                    episode
+                )
+                self.critic_opt.step()
+                self.critic_opt.zero_grad()
 
-            self.writer.add_scalar('actor loss', actor_loss_v.item(), episode)
-            self.writer.add_scalar('critic loss', critic_loss_v.item(), episode)
-            self.writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
-            self.writer.add_scalar('actor clipfrac', actor_loss_info['clipfrac'], episode)
+                self.writer.add_scalar('actor loss', actor_loss_v.item(), episode)
+                self.writer.add_scalar('critic loss', critic_loss_v.item(), episode)
+                self.writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
+                self.writer.add_scalar('actor clipfrac', actor_loss_info['clipfrac'], episode)
 
 
 def cat(a, b):
