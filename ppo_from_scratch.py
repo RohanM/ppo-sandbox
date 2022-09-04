@@ -53,6 +53,8 @@ class RolloutBuffer:
         self.actions_logps = []
         self.masks = []
         self.rewards = []
+        self.returns = None
+        self.advantages = None
 
     def add_obs(self, state: Tensor, action: int, action_logp: float, mask: bool, reward: float):
         self.states.append(state)
@@ -78,6 +80,13 @@ class RolloutBuffer:
         return tensor(self.rewards).unsqueeze(1)
 
     def get_returns(self):
+        if self.returns is None: self.build_returns()
+        return self.returns
+
+    def get_advantages(self):
+        return self.advantages
+
+    def build_returns(self):
         batch_size = len(self.rewards)
         returns = torch.zeros(batch_size)
 
@@ -85,9 +94,9 @@ class RolloutBuffer:
             next_return = returns[t+1] if t < batch_size-1 else 0
             returns[t] = self.rewards[t] + (next_return * self.masks[t])
 
-        return returns.unsqueeze(dim=1)
+        self.returns = returns.unsqueeze(dim=1)
 
-    def get_advantages(self, values, gamma=0.99, lmbda=0.95):
+    def build_advantages(self, values, gamma=0.99, lmbda=0.95):
         batch_size = len(self.rewards)
         advantages = torch.zeros(batch_size)
 
@@ -98,7 +107,7 @@ class RolloutBuffer:
             delta = self.rewards[t] + (gamma * next_value * self.masks[t]) - values[t]
             advantages[t] = delta + (gamma * lmbda * next_advantage * self.masks[t])
 
-        return advantages.unsqueeze(dim=1)
+        self.advantages = advantages.unsqueeze(dim=1)
 
 
 class Trainer:
@@ -226,7 +235,8 @@ if __name__ == '__main__':
         values = critic(states)
         rewards = buf.get_rewards()
         returns = buf.get_returns()
-        advantages = normalise(buf.get_advantages(values))
+        buf.build_advantages(values)
+        advantages = normalise(buf.get_advantages())
 
         num_eps = rollout_steps - np.count_nonzero(masks)
         avg_reward = rewards.sum().item() / num_eps

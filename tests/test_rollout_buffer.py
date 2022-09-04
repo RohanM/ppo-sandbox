@@ -53,8 +53,9 @@ def test_get_returns(buf):
     expected = tensor([[3], [2], [1], [2], [1]]).float()
     assert torch.equal(returns, expected)
 
-def test_get_advantages(buf):
-    advantages = buf.get_advantages(tensor([0, 1, 2, 3, 4]), gamma=0.9, lmbda=0.8)
+def test_build_advantages(buf):
+    advantages = buf.build_advantages(tensor([0, 1, 2, 3, 4]), gamma=0.9, lmbda=0.8)
+    advantages = buf.get_advantages()
     expected = tensor([[2.68], [1.08], [-1.00], [2.03], [0.60]])
     assert torch.isclose(advantages, expected, atol=0.01).all()
 
