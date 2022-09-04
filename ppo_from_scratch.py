@@ -39,7 +39,6 @@ class CriticModel(nn.Sequential):
             nn.Linear(num_hidden, num_hidden),
             nn.ReLU(),
             nn.Linear(num_hidden, num_output),
-            nn.Tanh(),
         ]
         super().__init__(*layers)
 
