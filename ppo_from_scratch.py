@@ -174,7 +174,7 @@ if __name__ == '__main__':
         returns = buf.get_returns(values)
         advantages = buf.get_advantages(returns, values)
 
-        num_eps = np.count_nonzero(masks)
+        num_eps = ppo_steps - np.count_nonzero(masks)
         avg_reward = rewards.sum().item() / num_eps
         print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
 
