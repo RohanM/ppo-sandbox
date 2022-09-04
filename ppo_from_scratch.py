@@ -114,9 +114,6 @@ def actor_loss(newpolicy_logp, oldpolicy_logp, advantages):
 
     return actor_loss, { 'approx_kl': approx_kl, 'clipfrac': clipfrac }
 
-def critic_loss(values, rewards):
-    return F.mse_loss(values[:-1], rewards)
-
 
 def cat(a, b):
     return torch.cat((a, b.float().unsqueeze(dim=0)))
@@ -205,7 +202,7 @@ if __name__ == '__main__':
                 actions_logps.detach(),
                 advantages.detach()
             )
-            critic_loss_v = critic_loss(values, rewards)
+            critic_loss_v = F.mse_loss(values, returns)
 
             actor_loss_v.backward(retain_graph=True)
             writer.add_histogram(
