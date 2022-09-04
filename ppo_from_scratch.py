@@ -176,10 +176,9 @@ if __name__ == '__main__':
                 env.reset()
 
         states = buf.get_states()
-        states_extended = buf.get_states(extended=True)
         actions_logps = buf.get_actions_logps()
         masks = buf.get_masks()
-        values = critic(states_extended)
+        values = critic(states)
         rewards = buf.get_rewards()
         returns = buf.get_returns()
         advantages = normalise(buf.get_advantages(values))
@@ -199,8 +198,8 @@ if __name__ == '__main__':
             new_actions_dists = actor(states)
             dist = torch.distributions.Categorical(probs=new_actions_dists)
             new_actions_logps = dist.log_prob(buf.get_actions())
+            values = critic(states)
 
-            values = critic(states_extended)
             actor_loss_v, actor_loss_info = actor_loss(
                 new_actions_logps,
                 actions_logps.detach(),
