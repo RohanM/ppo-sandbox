@@ -55,7 +55,7 @@ class RolloutBuffer:
         self.masks = []
         self.rewards = []
 
-    def add_obs(self, state, action, action_logp, mask, reward):
+    def add_obs(self, state: Tensor, action: int, action_logp: float, mask: bool, reward: float):
         self.states.append(state)
         self.actions.append(action)
         self.actions_logps.append(action_logp)
