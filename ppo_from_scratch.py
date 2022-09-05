@@ -221,6 +221,7 @@ if __name__ == '__main__':
     }, {})
 
     trainer = Trainer(actor, critic, writer)
+    avg_rewards = []
 
     for episode in range(max_episodes):
         buf = RolloutBuffer()
@@ -256,7 +257,10 @@ if __name__ == '__main__':
         advantages = normalise(buf.get_advantages())
 
         num_eps = rollout_steps - np.count_nonzero(masks)
+        if masks[-1]: num_eps += 1
+
         avg_reward = rewards.sum().item() / num_eps
+        avg_rewards.append(avg_reward)
         print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
 
         writer.add_histogram("loss/advantages", advantages, episode)
