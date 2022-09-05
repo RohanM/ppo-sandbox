@@ -268,3 +268,7 @@ if __name__ == '__main__':
         writer.add_scalar('avg episode length', rollout_steps / num_eps, episode)
 
         trainer.train(num_epochs, buf)
+
+    writer.close()
+    torch.save(actor.state_dict(), 'actor.pth')
+    torch.save(critic.state_dict(), 'critic.pth')
