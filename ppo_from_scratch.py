@@ -195,7 +195,7 @@ def cat(a, b):
 def normalise(t: Tensor) -> Tensor:
     return (t - t.mean()) / (t.std() + 1e-10)
 
-env = gym.make('CartPole-v1', new_step_api=True)
+env = gym.make('LunarLander-v2', new_step_api=True)
 
 if isinstance(env.observation_space, gym.spaces.MultiDiscrete):
     n_state = len(env.observation_space)
