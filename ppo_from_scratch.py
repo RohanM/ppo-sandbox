@@ -5,7 +5,8 @@ import torch
 from torch import nn, tensor, Tensor, optim
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
-from torch.utils.tensorboard import SummaryWriter
+import wandb
+
 
 rollout_steps = 500
 max_episodes = 1000
@@ -126,12 +127,12 @@ class RolloutBuffer(Dataset):
 
 
 class Trainer:
-    def __init__(self, actor, critic, writer: SummaryWriter):
+    def __init__(self, actor, critic, wandb):
         self.actor = actor
         self.critic = critic
         self.actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
         self.critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
-        self.writer = writer
+        self.wandb = wandb
 
 
     def actor_loss(self, newpolicy_logp, oldpolicy_logp, advantages):
@@ -166,27 +167,25 @@ class Trainer:
                 critic_loss_v = F.mse_loss(values, returns)
 
                 actor_loss_v.backward(retain_graph=True)
-                self.writer.add_histogram(
-                    "gradients/actor",
-                    torch.cat([p.grad.view(-1) for p in actor.parameters()]),
-                    episode
-                )
+                # self.wandb.log({
+                #     'gradients/actor': torch.cat([p.grad.view(-1) for p in actor.parameters()])
+                # })
                 self.actor_opt.step()
                 self.actor_opt.zero_grad()
 
                 critic_loss_v.backward()
-                self.writer.add_histogram(
-                    "gradients/critic",
-                    torch.cat([p.grad.view(-1) for p in critic.parameters()]),
-                    episode
-                )
+                # self.wandb.log({
+                #     'gradients/critic': torch.cat([p.grad.view(-1) for p in critic.parameters()])
+                # })
                 self.critic_opt.step()
                 self.critic_opt.zero_grad()
 
-                self.writer.add_scalar('actor loss', actor_loss_v.item(), episode)
-                self.writer.add_scalar('critic loss', critic_loss_v.item(), episode)
-                self.writer.add_scalar('actor kl', actor_loss_info['approx_kl'], episode)
-                self.writer.add_scalar('actor clipfrac', actor_loss_info['clipfrac'], episode)
+                self.wandb.log({
+                    'loss/actor': actor_loss_v.item(),
+                    'loss/critic': critic_loss_v.item(),
+                    'actor kl': actor_loss_info['approx_kl'],
+                    'actor clipfrac': actor_loss_info['clipfrac'],
+                })
 
 
 def cat(a, b):
@@ -208,19 +207,24 @@ critic = CriticModel(num_input=n_state)
 
 
 if __name__ == '__main__':
-    writer = SummaryWriter()
-    writer.add_hparams({
-        'rollout_steps': rollout_steps,
-        'max_episodes': max_episodes,
-        'num_epochs': num_epochs,
-        'actor_lr': actor_lr,
-        'critic_lr': critic_lr,
-        'lmbda': lmbda,
-        'gamma': gamma,
-        'epsilon': epsilon,
-    }, {})
+    wandb.init(
+        project='ppo-sandbox-lunar-lander',
+        config={
+            'rollout_steps': rollout_steps,
+            'max_episodes': max_episodes,
+            'num_epochs': num_epochs,
+            'actor_lr': actor_lr,
+            'critic_lr': critic_lr,
+            'lmbda': lmbda,
+            'gamma': gamma,
+            'epsilon': epsilon,
+        }
+    )
 
-    trainer = Trainer(actor, critic, writer)
+    wandb.watch(actor)
+    wandb.watch(critic)
+
+    trainer = Trainer(actor, critic, wandb)
     avg_rewards = []
 
     for episode in range(max_episodes):
@@ -263,16 +267,16 @@ if __name__ == '__main__':
         avg_rewards.append(avg_reward)
         print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
 
-        writer.add_histogram("loss/advantages", advantages, episode)
-        writer.add_histogram("loss/values", values, episode)
-        writer.add_histogram("loss/returns", returns, episode)
-
-        writer.add_scalar('avg reward', avg_reward, episode)
-        writer.add_scalar('max reward', rewards.max().item(), episode)
-        writer.add_scalar('avg episode length', rollout_steps / num_eps, episode)
+        wandb.log({
+            'episode/advantages': advantages,
+            'episode/values': values,
+            'episode/returns': returns,
+            'avg reward': avg_reward,
+            'max reward': rewards.max().item(),
+            'avg episode length': rollout_steps / num_eps,
+        })
 
         trainer.train(num_epochs, buf)
 
-    writer.close()
     torch.save(actor.state_dict(), 'actor.pth')
     torch.save(critic.state_dict(), 'critic.pth')
