@@ -8,8 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 rollout_steps = 500
-max_episodes = 400
-num_epochs = 4
+max_episodes = 1000
+num_epochs = 2
 
 actor_lr = 3e-4
 critic_lr = 1e-3
