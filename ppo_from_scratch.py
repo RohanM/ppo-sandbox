@@ -6,18 +6,9 @@ from torch import nn, tensor, Tensor, optim
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 import wandb
+import argparse
 
 
-rollout_steps = 500
-max_episodes = 1000
-num_epochs = 2
-
-actor_lr = 3e-4
-critic_lr = 1e-3
-
-lmbda = 0.95
-gamma = 0.99
-epsilon = 0.2
 
 class ActorModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32, num_output=4):
@@ -127,22 +118,23 @@ class RolloutBuffer(Dataset):
 
 
 class Trainer:
-    def __init__(self, actor, critic, wandb):
+    def __init__(self, actor, critic, actor_lr, critic_lr, epsilon, wandb):
         self.actor = actor
         self.critic = critic
         self.actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
         self.critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
+        self.epsilon = epsilon
         self.wandb = wandb
 
 
     def actor_loss(self, newpolicy_logp, oldpolicy_logp, advantages):
         ratio = torch.exp(newpolicy_logp - oldpolicy_logp)
         p1 = ratio * advantages
-        p2 = torch.clip(ratio, min=1 - epsilon, max=1 + epsilon) * advantages
+        p2 = torch.clip(ratio, min=1 - self.epsilon, max=1 + self.epsilon) * advantages
         actor_loss = -torch.min(p1, p2).mean()
 
         approx_kl = (oldpolicy_logp - newpolicy_logp).mean().item()
-        clipped = ratio.gt(1+epsilon) | ratio.lt(1-epsilon)
+        clipped = ratio.gt(1+self.epsilon) | ratio.lt(1-self.epsilon)
         clipfrac = torch.as_tensor(clipped, dtype=torch.float32).mean().item()
 
         return actor_loss, { 'approx_kl': approx_kl, 'clipfrac': clipfrac }
@@ -194,45 +186,61 @@ def cat(a, b):
 def normalise(t: Tensor) -> Tensor:
     return (t - t.mean()) / (t.std() + 1e-10)
 
-env = gym.make('LunarLander-v2', new_step_api=True)
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--gym', type=str, default='LunarLander-v2')
+    parser.add_argument('--rollout-steps', type=int, default=4000)
+    parser.add_argument('--max-episodes', type=int, default=1000)
+    parser.add_argument('--num-epochs', type=int, default=4)
+    parser.add_argument('--actor-lr', type=float, default=0.0003)
+    parser.add_argument('--critic-lr', type=float, default=0.001)
+    parser.add_argument('--lmbda', type=float, default=0.95)
+    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--epsilon', type=float, default=0.2)
+    return parser.parse_args()
 
-if isinstance(env.observation_space, gym.spaces.MultiDiscrete):
-    n_state = len(env.observation_space)
-else:
-    n_state = env.observation_space.shape[0]
-n_actions = env.action_space.n
-
-actor = ActorModel(num_input=n_state, num_output=n_actions)
-critic = CriticModel(num_input=n_state)
 
 
 if __name__ == '__main__':
+    args = parse_args()
+
+    env = gym.make('LunarLander-v2', new_step_api=True)
+
+    if isinstance(env.observation_space, gym.spaces.MultiDiscrete):
+        n_state = len(env.observation_space)
+    else:
+        n_state = env.observation_space.shape[0]
+        n_actions = env.action_space.n
+
+    actor = ActorModel(num_input=n_state, num_output=n_actions)
+    critic = CriticModel(num_input=n_state)
+
     wandb.init(
         project='ppo-sandbox-lunar-lander',
         config={
-            'rollout_steps': rollout_steps,
-            'max_episodes': max_episodes,
-            'num_epochs': num_epochs,
-            'actor_lr': actor_lr,
-            'critic_lr': critic_lr,
-            'lmbda': lmbda,
-            'gamma': gamma,
-            'epsilon': epsilon,
+            'rollout_steps': args.rollout_steps,
+            'max_episodes': args.max_episodes,
+            'num_epochs': args.num_epochs,
+            'actor_lr': args.actor_lr,
+            'critic_lr': args.critic_lr,
+            'lmbda': args.lmbda,
+            'gamma': args.gamma,
+            'epsilon': args.epsilon,
         }
     )
 
     wandb.watch(actor)
     wandb.watch(critic)
 
-    trainer = Trainer(actor, critic, wandb)
+    trainer = Trainer(actor, critic, args.actor_lr, args.critic_lr, args.epsilon, wandb)
     avg_rewards = []
 
-    for episode in range(max_episodes):
+    for episode in range(args.max_episodes):
         buf = RolloutBuffer()
 
         state = env.reset()
 
-        for i in range(rollout_steps):
+        for i in range(args.rollout_steps):
             state_input = tensor(state).float()
             action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
 
@@ -260,12 +268,12 @@ if __name__ == '__main__':
         buf.build_advantages(values)
         advantages = normalise(buf.get_advantages())
 
-        num_eps = rollout_steps - np.count_nonzero(masks)
+        num_eps = args.rollout_steps - np.count_nonzero(masks)
         if masks[-1]: num_eps += 1
 
         avg_reward = rewards.sum().item() / num_eps
         avg_rewards.append(avg_reward)
-        print(f'{rewards.mean():.4f}, {rewards.max()}, {num_eps}, {avg_reward:.4f}')
+        print(f'{episode+1}/{args.max_episodes}, {rewards.mean():.4f}, {rewards.max():.4f}, {num_eps}, {avg_reward:.4f}')
 
         wandb.log({
             'episode/advantages': advantages,
@@ -273,10 +281,10 @@ if __name__ == '__main__':
             'episode/returns': returns,
             'avg reward': avg_reward,
             'max reward': rewards.max().item(),
-            'avg episode length': rollout_steps / num_eps,
+            'avg episode length': args.rollout_steps / num_eps,
         })
 
-        trainer.train(num_epochs, buf)
+        trainer.train(args.num_epochs, buf)
 
     torch.save(actor.state_dict(), 'actor.pth')
     torch.save(critic.state_dict(), 'critic.pth')
