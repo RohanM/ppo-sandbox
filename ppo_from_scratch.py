@@ -82,11 +82,7 @@ class RolloutBuffer(Dataset):
     def get_advantages(self):
         return self.advantages
 
-    def build_returns(self, values):
-        if self.advantages is None: self.build_advantages(values)
-        self.returns = self.advantages + values
-
-    def build_advantages(self, values, gamma=0.99, lmbda=0.95):
+    def build_returns_advantages(self, values, gamma=0.99, lmbda=0.95):
         batch_size = len(self.rewards)
         advantages = torch.zeros(batch_size)
 
@@ -98,6 +94,7 @@ class RolloutBuffer(Dataset):
             advantages[t] = delta + (gamma * lmbda * next_advantage * self.masks[t])
 
         self.advantages = advantages.unsqueeze(dim=1)
+        self.returns = self.advantages + values
 
     def __len__(self):
         return len(self.states)
@@ -265,10 +262,9 @@ if __name__ == '__main__':
         masks = buf.get_masks()
         values = critic(states)
         rewards = buf.get_rewards()
-        buf.build_advantages(values)
-        advantages = normalise(buf.get_advantages())
-        buf.build_returns(values)
+        buf.build_returns_advantages(values)
         returns = buf.get_returns()
+        advantages = normalise(buf.get_advantages())
 
         num_eps = args.rollout_steps - np.count_nonzero(masks)
         if masks[-1]: num_eps += 1
