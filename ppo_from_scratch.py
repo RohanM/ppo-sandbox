@@ -77,21 +77,14 @@ class RolloutBuffer(Dataset):
         return tensor(self.rewards).unsqueeze(1)
 
     def get_returns(self):
-        if self.returns is None: self.build_returns()
         return self.returns
 
     def get_advantages(self):
         return self.advantages
 
-    def build_returns(self):
-        batch_size = len(self.rewards)
-        returns = torch.zeros(batch_size)
-
-        for t in reversed(range(batch_size)):
-            next_return = returns[t+1] if t < batch_size-1 else 0
-            returns[t] = self.rewards[t] + (next_return * self.masks[t])
-
-        self.returns = returns.unsqueeze(dim=1)
+    def build_returns(self, values):
+        if self.advantages is None: self.build_advantages(values)
+        self.returns = self.advantages + values
 
     def build_advantages(self, values, gamma=0.99, lmbda=0.95):
         batch_size = len(self.rewards)
@@ -161,7 +154,7 @@ class Trainer:
                     actions_logps.detach(),
                     advantages.detach()
                 )
-                critic_loss_v = F.mse_loss(values, returns)
+                critic_loss_v = F.mse_loss(values, returns.detach())
 
                 actor_loss_v.backward(retain_graph=True)
                 # self.wandb.log({
@@ -272,9 +265,10 @@ if __name__ == '__main__':
         masks = buf.get_masks()
         values = critic(states)
         rewards = buf.get_rewards()
-        returns = buf.get_returns()
         buf.build_advantages(values)
         advantages = normalise(buf.get_advantages())
+        buf.build_returns(values)
+        returns = buf.get_returns()
 
         num_eps = args.rollout_steps - np.count_nonzero(masks)
         if masks[-1]: num_eps += 1
