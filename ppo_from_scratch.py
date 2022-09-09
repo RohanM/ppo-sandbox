@@ -118,11 +118,12 @@ class RolloutBuffer(Dataset):
 
 
 class Trainer:
-    def __init__(self, actor, critic, actor_lr, critic_lr, epsilon, wandb):
+    def __init__(self, actor, critic, actor_lr, critic_lr, batch_size, epsilon, wandb):
         self.actor = actor
         self.critic = critic
         self.actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
         self.critic_opt = optim.Adam(critic.parameters(), lr=critic_lr)
+        self.batch_size = batch_size
         self.epsilon = epsilon
         self.wandb = wandb
 
@@ -141,7 +142,7 @@ class Trainer:
 
 
     def train(self, num_epochs: int, buf: RolloutBuffer):
-        data_loader = DataLoader(buf, batch_size=64, shuffle=True)
+        data_loader = DataLoader(buf, batch_size=self.batch_size, shuffle=True)
         self.actor.train()
         self.critic.train()
         for epoch in range(num_epochs):
@@ -197,6 +198,7 @@ def parse_args():
     parser.add_argument('--critic-lr', type=float, default=0.001)
     parser.add_argument('--lmbda', type=float, default=0.95)
     parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--epsilon', type=float, default=0.2)
     return parser.parse_args()
 
@@ -234,7 +236,7 @@ if __name__ == '__main__':
     wandb.watch(actor)
     wandb.watch(critic)
 
-    trainer = Trainer(actor, critic, args.actor_lr, args.critic_lr, args.epsilon, wandb)
+    trainer = Trainer(actor, critic, args.actor_lr, args.critic_lr, args.batch_size, args.epsilon, wandb)
     avg_rewards = []
 
     for episode in range(args.max_episodes):
