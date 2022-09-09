@@ -7,6 +7,14 @@ optional = false
 python-versions = ">=3.6"
 
 [[package]]
+name = "argparse"
+version = "1.4.0"
+description = "Python command-line parsing library"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "atomicwrites"
 version = "1.4.1"
 description = "Atomic file writes."
@@ -715,12 +723,16 @@ testing = ["func-timeout", "jaraco.itertools", "pytest (>=6)", "pytest-black (>=
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "00373000e82061e2d4478f5e645743d13dd54e5d90aa41caa07a8f248987a9a9"
+content-hash = "4bf062fdea169e529d3e968b8c2f6cfee184388bf3a314647f5b0c64cd835283"
 
 [metadata.files]
 absl-py = [
     {file = "absl-py-1.2.0.tar.gz", hash = "sha256:f568809938c49abbda89826223c992b630afd23c638160ad7840cfe347710d97"},
     {file = "absl_py-1.2.0-py3-none-any.whl", hash = "sha256:5d15f85b8cc859c6245bc9886ba664460ed96a6fee895416caa37d669ee74a9a"},
+]
+argparse = [
+    {file = "argparse-1.4.0-py2.py3-none-any.whl", hash = "sha256:c31647edb69fd3d465a847ea3157d37bed1f95f19760b11a47aa91c04b666314"},
+    {file = "argparse-1.4.0.tar.gz", hash = "sha256:62b089a55be1d8949cd2bc7e0df0bddb9e028faefc8c32038cc84862aefdd6e4"},
 ]
 atomicwrites = [
     {file = "atomicwrites-1.4.1.tar.gz", hash = "sha256:81b2c9071a49367a7f770170e5eec8cb66567cfbbc8c73d20ce5ca4a8d71cf11"},
