@@ -9,15 +9,19 @@ import wandb
 import argparse
 
 
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
 
 class ActorModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32, num_output=4):
         layers = [
-            nn.Linear(num_input, num_hidden),
+            layer_init(nn.Linear(num_input, num_hidden)),
             nn.Tanh(),
-            nn.Linear(num_hidden, num_hidden),
+            layer_init(nn.Linear(num_hidden, num_hidden)),
             nn.Tanh(),
-            nn.Linear(num_hidden, num_output),
+            layer_init(nn.Linear(num_hidden, num_output), std=0.01),
             nn.Softmax(dim=1),
         ]
         super().__init__(*layers)
@@ -27,11 +31,11 @@ class CriticModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32):
         num_output = 1
         layers = [
-            nn.Linear(num_input, num_hidden),
+            layer_init(nn.Linear(num_input, num_hidden)),
             nn.Tanh(),
-            nn.Linear(num_hidden, num_hidden),
+            layer_init(nn.Linear(num_hidden, num_hidden)),
             nn.Tanh(),
-            nn.Linear(num_hidden, num_output),
+            layer_init(nn.Linear(num_hidden, num_output), std=1.0),
         ]
         super().__init__(*layers)
 
