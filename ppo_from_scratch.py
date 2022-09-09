@@ -14,9 +14,9 @@ class ActorModel(nn.Sequential):
     def __init__(self, num_input=8, num_hidden=32, num_output=4):
         layers = [
             nn.Linear(num_input, num_hidden),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(num_hidden, num_hidden),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(num_hidden, num_output),
             nn.Softmax(dim=1),
         ]
@@ -28,9 +28,9 @@ class CriticModel(nn.Sequential):
         num_output = 1
         layers = [
             nn.Linear(num_input, num_hidden),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(num_hidden, num_hidden),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(num_hidden, num_output),
         ]
         super().__init__(*layers)
