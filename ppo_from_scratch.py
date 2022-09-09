@@ -264,7 +264,7 @@ if __name__ == '__main__':
         rewards = buf.get_rewards()
         buf.build_returns_advantages(values)
         returns = buf.get_returns()
-        advantages = normalise(buf.get_advantages())
+        advantages = buf.get_advantages()
 
         num_eps = args.rollout_steps - np.count_nonzero(masks)
         if masks[-1]: num_eps += 1
