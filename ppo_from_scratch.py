@@ -1,5 +1,6 @@
 import gym
 import random
+import time
 import simple_env
 import numpy as np
 import torch
@@ -265,6 +266,7 @@ if __name__ == '__main__':
     avg_rewards = []
 
     for episode in range(args.max_episodes):
+        start_episode_time = time.time()
         buf = RolloutBuffer(device)
         episodic_returns = []
 
@@ -306,6 +308,18 @@ if __name__ == '__main__':
         avg_rewards.append(avg_reward)
         print(f'{episode+1}/{args.max_episodes}, {rewards.mean():.4f}, {rewards.max():.4f}, {num_eps}, {avg_reward:.4f}')
 
+        start_training_time = time.time()
+
+        trainer.train(args.num_epochs, buf)
+
+        end_training_time = time.time()
+
+        rollout_time = start_training_time - start_episode_time
+        training_time = end_training_time - start_training_time
+        total_time = end_training_time - start_episode_time
+        fps = 60 / total_time
+        frac_training = training_time / total_time
+
         wandb.log({
             'episode/advantages': advantages,
             'episode/values': values,
@@ -314,9 +328,9 @@ if __name__ == '__main__':
             'avg reward': avg_reward,
             'max reward': rewards.max().item(),
             'avg episode length': args.rollout_steps / num_eps,
+            'timing/fps': fps,
+            'timing/training:rollout': frac_training,
         })
-
-        trainer.train(args.num_epochs, buf)
 
     torch.save(actor.state_dict(), 'actor.pth')
     torch.save(critic.state_dict(), 'critic.pth')
