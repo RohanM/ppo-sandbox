@@ -205,6 +205,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     env = gym.make('LunarLander-v2')
+    env = gym.wrappers.RecordEpisodeStatistics(env)
 
     env.action_space.seed(args.seed)
     env.observation_space.seed(args.seed)
@@ -246,6 +247,7 @@ if __name__ == '__main__':
 
     for episode in range(args.max_episodes):
         buf = RolloutBuffer()
+        episodic_returns = []
 
         state, info = env.reset(seed=args.seed)
 
@@ -266,6 +268,7 @@ if __name__ == '__main__':
             state = observation
 
             if terminated or truncated:
+                episodic_returns.append(info['episode']['r'])
                 env.reset()
 
         states = buf.get_states()
@@ -288,6 +291,7 @@ if __name__ == '__main__':
             'episode/advantages': advantages,
             'episode/values': values,
             'episode/returns': returns,
+            'episode/avg episodic return': np.mean(episodic_returns),
             'avg reward': avg_reward,
             'max reward': rewards.max().item(),
             'avg episode length': args.rollout_steps / num_eps,
