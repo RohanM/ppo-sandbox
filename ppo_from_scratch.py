@@ -63,8 +63,11 @@ class RolloutBuffer(Dataset):
         self.masks.append(mask)
         self.rewards.append(reward)
 
+    def prep_data(self):
+        self.states = torch.stack(self.states).to(self.device)
+
     def get_states(self):
-        return torch.stack(states).to(self.device)
+        return self.states
 
     def get_actions(self):
         return torch.tensor(self.actions).to(self.device).unsqueeze(1)
@@ -298,6 +301,7 @@ if __name__ == '__main__':
                 episodic_returns.append(info['episode']['r'])
                 env.reset()
 
+        buf.prep_data()
         states = buf.get_states()
         actions_logps = buf.get_actions_logps()
         masks = buf.get_masks()
