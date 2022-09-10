@@ -196,6 +196,7 @@ def parse_args():
     parser.add_argument('--exp-name', type=str, default=None)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--track', action='store_true')
+    parser.add_argument('--record-video', action='store_true')
     parser.add_argument('--rollout-steps', type=int, default=4000)
     parser.add_argument('--max-episodes', type=int, default=1000)
     parser.add_argument('--num-epochs', type=int, default=4)
@@ -208,11 +209,11 @@ def parse_args():
     parser.add_argument('--mps', action='store_true')
     return parser.parse_args()
 
-def make_env(gym_id, seed, idx, exp_name):
+def make_env(gym_id, seed, idx, exp_name, record_video):
     def thunk():
         env = gym.make(gym_id, render_mode='rgb_array')
         env = gym.wrappers.RecordEpisodeStatistics(env)
-        if idx == 0:
+        if record_video and idx == 0:
             env = gym.wrappers.RecordVideo(
                 env,
                 f'videos/{exp_name}',
@@ -227,7 +228,7 @@ def make_env(gym_id, seed, idx, exp_name):
 if __name__ == '__main__':
     args = parse_args()
 
-    env = make_env('LunarLander-v2', args.seed, 0, args.exp_name)()
+    env = make_env('LunarLander-v2', args.seed, 0, args.exp_name, args.record_video)()
 
     random.seed(args.seed)
     np.random.seed(args.seed)
