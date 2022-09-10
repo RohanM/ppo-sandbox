@@ -190,7 +190,7 @@ protobuf = ["grpcio-tools (>=1.48.0)"]
 
 [[package]]
 name = "gym"
-version = "0.25.2"
+version = "0.26.0"
 description = "Gym: A universal API for reinforcement learning environments"
 category = "main"
 optional = false
@@ -207,14 +207,14 @@ swig = {version = ">=4.0.0,<5.0.0", optional = true, markers = "extra == \"box2d
 
 [package.extras]
 accept-rom-license = ["autorom[accept-rom-license] (>=0.4.2,<0.5.0)"]
-all = ["ale-py (>=0.7.5,<0.8.0)", "box2d-py (==2.3.5)", "imageio (>=2.14.1)", "lz4 (>=3.1.0)", "matplotlib (>=3.0)", "mujoco (==2.2.0)", "mujoco_py (>=2.1,<2.2)", "opencv-python (>=3.0)", "pygame (==2.1.0)", "pytest (==7.0.1)", "swig (>=4.0.0,<5.0.0)"]
-atari = ["ale-py (>=0.7.5,<0.8.0)"]
+all = ["ale-py (>=0.8.0,<0.9.0)", "box2d-py (==2.3.5)", "imageio (>=2.14.1)", "lz4 (>=3.1.0)", "matplotlib (>=3.0)", "moviepy (>=1.0.0)", "mujoco (==2.2.0)", "mujoco_py (>=2.1,<2.2)", "opencv-python (>=3.0)", "pygame (==2.1.0)", "pytest (==7.0.1)", "swig (>=4.0.0,<5.0.0)"]
+atari = ["ale-py (>=0.8.0,<0.9.0)"]
 box2d = ["box2d-py (==2.3.5)", "pygame (==2.1.0)", "swig (>=4.0.0,<5.0.0)"]
 classic_control = ["pygame (==2.1.0)"]
 mujoco = ["imageio (>=2.14.1)", "mujoco (==2.2.0)"]
 mujoco_py = ["mujoco_py (>=2.1,<2.2)"]
-other = ["lz4 (>=3.1.0)", "matplotlib (>=3.0)", "opencv-python (>=3.0)"]
-testing = ["box2d-py (==2.3.5)", "imageio (>=2.14.1)", "lz4 (>=3.1.0)", "matplotlib (>=3.0)", "mujoco (==2.2.0)", "mujoco_py (>=2.1,<2.2)", "opencv-python (>=3.0)", "pygame (==2.1.0)", "pytest (==7.0.1)", "swig (>=4.0.0,<5.0.0)"]
+other = ["lz4 (>=3.1.0)", "matplotlib (>=3.0)", "moviepy (>=1.0.0)", "opencv-python (>=3.0)"]
+testing = ["box2d-py (==2.3.5)", "imageio (>=2.14.1)", "lz4 (>=3.1.0)", "matplotlib (>=3.0)", "moviepy (>=1.0.0)", "mujoco (==2.2.0)", "mujoco_py (>=2.1,<2.2)", "opencv-python (>=3.0)", "pygame (==2.1.0)", "pytest (==7.0.1)", "swig (>=4.0.0,<5.0.0)"]
 toy_text = ["pygame (==2.1.0)"]
 
 [[package]]
@@ -723,7 +723,7 @@ testing = ["func-timeout", "jaraco.itertools", "pytest (>=6)", "pytest-black (>=
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "4bf062fdea169e529d3e968b8c2f6cfee184388bf3a314647f5b0c64cd835283"
+content-hash = "f7986335e0eff14677e470d2028fc8dcfb52a17796e016dd683c3c13e9a073d9"
 
 [metadata.files]
 absl-py = [
@@ -844,7 +844,7 @@ grpcio = [
     {file = "grpcio-1.48.0.tar.gz", hash = "sha256:eaf4bb73819863440727195411ab3b5c304f6663625e66f348e91ebe0a039306"},
 ]
 gym = [
-    {file = "gym-0.25.2.tar.gz", hash = "sha256:c8323f4c6f37363710b519742a0094316deddc9d8fc9e3f6deac08d6da47150c"},
+    {file = "gym-0.26.0.tar.gz", hash = "sha256:12992d79ccc41e160b7381db18f475a61a4dcc4973d38475b65cab026e404a7a"},
 ]
 gym-notices = [
     {file = "gym-notices-0.0.8.tar.gz", hash = "sha256:ad25e200487cafa369728625fe064e88ada1346618526102659b4640f2b4b911"},

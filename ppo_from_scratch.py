@@ -204,7 +204,7 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
-    env = gym.make('LunarLander-v2', new_step_api=True)
+    env = gym.make('LunarLander-v2')
 
     env.action_space.seed(args.seed)
     env.observation_space.seed(args.seed)
@@ -247,7 +247,7 @@ if __name__ == '__main__':
     for episode in range(args.max_episodes):
         buf = RolloutBuffer()
 
-        state = env.reset(seed=args.seed)
+        state, info = env.reset(seed=args.seed)
 
         for i in range(args.rollout_steps):
             state_input = tensor(state).float()
