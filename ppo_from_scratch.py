@@ -42,7 +42,8 @@ class CriticModel(nn.Sequential):
 
 
 class RolloutBuffer(Dataset):
-    def __init__(self):
+    def __init__(self, device=torch.device('cpu')):
+        self.device = device
         self.reset()
 
     def reset(self):
@@ -63,19 +64,19 @@ class RolloutBuffer(Dataset):
 
     def get_states(self, extended: bool = False):
         states = self.states + self.states[-1:] if extended else self.states
-        return torch.stack(states)
+        return torch.stack(states).to(self.device)
 
     def get_actions(self):
-        return torch.tensor(self.actions).unsqueeze(1)
+        return torch.tensor(self.actions).to(self.device).unsqueeze(1)
 
     def get_actions_logps(self):
-        return torch.stack(self.actions_logps).unsqueeze(1)
+        return torch.stack(self.actions_logps).to(self.device).unsqueeze(1)
 
     def get_masks(self):
         return self.masks
 
     def get_rewards(self):
-        return tensor(self.rewards).unsqueeze(1)
+        return tensor(self.rewards).float().to(self.device).unsqueeze(1)
 
     def get_returns(self):
         return self.returns
@@ -85,7 +86,7 @@ class RolloutBuffer(Dataset):
 
     def build_returns_advantages(self, values, gamma=0.99, lmbda=0.95):
         batch_size = len(self.rewards)
-        advantages = torch.zeros(batch_size)
+        advantages = torch.zeros(batch_size).to(self.device)
 
         for t in reversed(range(batch_size)):
             next_value = values[t + 1] if t < batch_size-1 else values[t]
@@ -175,6 +176,13 @@ class Trainer:
                     'actor clipfrac': actor_loss_info['clipfrac'],
                 })
 
+def get_device(args):
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    elif torch.backends.mps.is_available() and args.mps:
+        return torch.device('mps')
+    else:
+        return torch.device('cpu')
 
 def cat(a, b):
     return torch.cat((a, b.float().unsqueeze(dim=0)))
@@ -197,6 +205,7 @@ def parse_args():
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--epsilon', type=float, default=0.2)
+    parser.add_argument('--mps', action='store_true')
     return parser.parse_args()
 
 
@@ -224,8 +233,13 @@ if __name__ == '__main__':
         n_state = env.observation_space.shape[0]
         n_actions = env.action_space.n
 
+    device = get_device(args)
+
     actor = ActorModel(num_input=n_state, num_output=n_actions)
     critic = CriticModel(num_input=n_state)
+
+    actor.to(device)
+    critic.to(device)
 
     wandb.init(
         mode='online' if args.track else 'disabled',
@@ -251,20 +265,20 @@ if __name__ == '__main__':
     avg_rewards = []
 
     for episode in range(args.max_episodes):
-        buf = RolloutBuffer()
+        buf = RolloutBuffer(device)
         episodic_returns = []
 
         state, info = env.reset(seed=args.seed)
 
         for i in range(args.rollout_steps):
-            state_input = tensor(state).float()
+            state_input = tensor(state).to(device).float()
             action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
 
             dist = torch.distributions.Categorical(probs=action_dist)
             action = dist.sample()
             action_logp = dist.log_prob(action) # The log prob of the action we took
 
-            observation, reward, terminated, truncated, info = env.step(action.detach().data.numpy())
+            observation, reward, terminated, truncated, info = env.step(action.detach().cpu().numpy())
 
             mask = not (terminated or truncated)
 
