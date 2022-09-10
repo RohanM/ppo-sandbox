@@ -218,7 +218,6 @@ def parse_args():
 def make_env(gym_id, seed, idx, exp_name, record_video):
     def thunk():
         env = gym.make(gym_id, render_mode='rgb_array')
-        env = gym.wrappers.RecordEpisodeStatistics(env)
         if record_video and idx == 0:
             env = gym.wrappers.RecordVideo(
                 env,
@@ -280,7 +279,6 @@ if __name__ == '__main__':
     for episode in range(args.max_episodes):
         start_episode_time = time.time()
         buf = RolloutBuffer(device)
-        episodic_returns = []
 
         state, info = env.reset(seed=args.seed)
 
@@ -301,7 +299,6 @@ if __name__ == '__main__':
             state = observation
 
             if terminated or truncated:
-                episodic_returns.append(info['episode']['r'])
                 env.reset()
 
         buf.prep_data()
@@ -337,7 +334,6 @@ if __name__ == '__main__':
             'episode/advantages': advantages,
             'episode/values': values,
             'episode/returns': returns,
-            'episode/avg episodic return': np.mean(episodic_returns),
             'avg reward': avg_reward,
             'max reward': rewards.max().item(),
             'avg episode length': args.rollout_steps / num_eps,
