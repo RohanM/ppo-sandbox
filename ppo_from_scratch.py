@@ -63,8 +63,7 @@ class RolloutBuffer(Dataset):
         self.masks.append(mask)
         self.rewards.append(reward)
 
-    def get_states(self, extended: bool = False):
-        states = self.states + self.states[-1:] if extended else self.states
+    def get_states(self):
         return torch.stack(states).to(self.device)
 
     def get_actions(self):
