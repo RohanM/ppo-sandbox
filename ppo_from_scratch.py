@@ -204,8 +204,13 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
-    env = gym.make('LunarLander-v2')
+    env = gym.make('LunarLander-v2', render_mode='rgb_array')
     env = gym.wrappers.RecordEpisodeStatistics(env)
+    env = gym.wrappers.RecordVideo(
+        env,
+        f'videos/{args.exp_name}',
+        episode_trigger=lambda t: t % 1000 == 0
+    )
 
     env.action_space.seed(args.seed)
     env.observation_space.seed(args.seed)
