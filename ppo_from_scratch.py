@@ -65,12 +65,13 @@ class RolloutBuffer(Dataset):
 
     def prep_data(self):
         self.states = torch.stack(self.states).to(self.device)
+        self.actions = torch.tensor(self.actions).to(self.device)
 
     def get_states(self):
         return self.states
 
     def get_actions(self):
-        return torch.tensor(self.actions).to(self.device).unsqueeze(1)
+        return self.actions
 
     def get_actions_logps(self):
         return torch.stack(self.actions_logps).to(self.device).unsqueeze(1)
