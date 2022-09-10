@@ -209,21 +209,27 @@ def parse_args():
     parser.add_argument('--mps', action='store_true')
     return parser.parse_args()
 
+def make_env(gym_id, seed, idx, exp_name):
+    def thunk():
+        env = gym.make(gym_id, render_mode='rgb_array')
+        env = gym.wrappers.RecordEpisodeStatistics(env)
+        if idx == 0:
+            env = gym.wrappers.RecordVideo(
+                env,
+                f'videos/{exp_name}',
+                episode_trigger=lambda t: t % 1000 == 0
+            )
+        env.action_space.seed(seed)
+        env.observation_space.seed(seed)
+        return env
+    return thunk
 
 
 if __name__ == '__main__':
     args = parse_args()
 
-    env = gym.make('LunarLander-v2', render_mode='rgb_array')
-    env = gym.wrappers.RecordEpisodeStatistics(env)
-    env = gym.wrappers.RecordVideo(
-        env,
-        f'videos/{args.exp_name}',
-        episode_trigger=lambda t: t % 1000 == 0
-    )
+    env = make_env('LunarLander-v2', args.seed, 0, args.exp_name)()
 
-    env.action_space.seed(args.seed)
-    env.observation_space.seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
