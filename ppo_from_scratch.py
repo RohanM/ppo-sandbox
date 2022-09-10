@@ -1,4 +1,5 @@
 import gym
+import random
 import simple_env
 import numpy as np
 import torch
@@ -185,6 +186,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gym', type=str, default='LunarLander-v2')
     parser.add_argument('--exp-name', type=str, default=None)
+    parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--track', action='store_true')
     parser.add_argument('--rollout-steps', type=int, default=4000)
     parser.add_argument('--max-episodes', type=int, default=1000)
@@ -204,6 +206,12 @@ if __name__ == '__main__':
 
     env = gym.make('LunarLander-v2', new_step_api=True)
 
+    env.action_space.seed(args.seed)
+    env.observation_space.seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
     if isinstance(env.observation_space, gym.spaces.MultiDiscrete):
         n_state = len(env.observation_space)
     else:
@@ -218,6 +226,7 @@ if __name__ == '__main__':
         project='ppo-sandbox-lunar-lander',
         name=args.exp_name,
         config={
+            'seed': args.seed,
             'rollout_steps': args.rollout_steps,
             'max_episodes': args.max_episodes,
             'num_epochs': args.num_epochs,
@@ -238,7 +247,7 @@ if __name__ == '__main__':
     for episode in range(args.max_episodes):
         buf = RolloutBuffer()
 
-        state = env.reset()
+        state = env.reset(seed=args.seed)
 
         for i in range(args.rollout_steps):
             state_input = tensor(state).float()
