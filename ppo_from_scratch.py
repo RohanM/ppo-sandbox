@@ -63,21 +63,33 @@ class RolloutBuffer(Dataset):
         self.masks.append(mask)
         self.rewards.append(reward)
 
-    def get_states(self, extended: bool = False):
-        states = self.states + self.states[-1:] if extended else self.states
-        return torch.stack(states).to(self.device)
+    def prep_data(self, values):
+        self.__build_returns_advantages(values)
+
+        self.states = torch.stack(self.states).reshape(
+            (-1,) + envs.single_observation_space.shape
+        ).to(self.device)
+        self.actions = torch.stack(self.actions).reshape(-1).to(self.device)
+        self.actions_logps = torch.stack(self.actions_logps).reshape(-1).to(self.device)
+        self.masks = tensor(np.array(self.masks)).reshape(-1).to(self.device)
+        self.rewards = tensor(np.array(self.rewards)).float().reshape(-1).to(self.device)
+        self.returns = self.returns.reshape(-1, 1)
+        self.advantages = self.advantages.reshape(-1, 1)
+
+    def get_states(self):
+        return self.states
 
     def get_actions(self):
-        return torch.tensor(self.actions).to(self.device).unsqueeze(1)
+        return self.actions
 
     def get_actions_logps(self):
-        return torch.stack(self.actions_logps).to(self.device).unsqueeze(1)
+        return self.actions_logps
 
     def get_masks(self):
         return self.masks
 
     def get_rewards(self):
-        return tensor(self.rewards).float().to(self.device).unsqueeze(1)
+        return self.rewards
 
     def get_returns(self):
         return self.returns
@@ -85,19 +97,24 @@ class RolloutBuffer(Dataset):
     def get_advantages(self):
         return self.advantages
 
-    def build_returns_advantages(self, values, gamma=0.99, lmbda=0.95):
+    def __build_returns_advantages(self, values, gamma=0.99, lmbda=0.95):
         batch_size = len(self.rewards)
         advantages = torch.zeros(batch_size).to(self.device)
+
+        rewards = tensor(np.array(self.rewards)).float().unsqueeze(2).to(self.device)
+        masks = tensor(np.array(self.masks)).unsqueeze(2).to(self.device)
+        batch_size = rewards.shape[0]
+        advantages = torch.zeros_like(rewards).to(self.device)
 
         for t in reversed(range(batch_size)):
             next_value = values[t + 1] if t < batch_size-1 else values[t]
             next_advantage = advantages[t + 1] if t < batch_size-1 else advantages[t]
 
-            delta = self.rewards[t] + (gamma * next_value * self.masks[t]) - values[t]
-            advantages[t] = delta + (gamma * lmbda * next_advantage * self.masks[t])
+            delta = rewards[t] + (gamma * next_value * masks[t]) - values[t]
+            advantages[t] = delta + (gamma * lmbda * next_advantage * masks[t])
 
-        self.advantages = advantages.unsqueeze(dim=1)
-        self.returns = self.advantages + values
+        self.advantages = advantages
+        self.returns = advantages + values
 
     def __len__(self):
         return len(self.states)
@@ -195,10 +212,12 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gym', type=str, default='LunarLander-v2')
     parser.add_argument('--exp-name', type=str, default=None)
+    parser.add_argument('--num-envs', type=int, default=4)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--track', action='store_true')
-    parser.add_argument('--rollout-steps', type=int, default=4000)
-    parser.add_argument('--max-episodes', type=int, default=1000)
+    parser.add_argument('--record-video', action='store_true')
+    parser.add_argument('--rollout-steps', type=int, default=500)
+    parser.add_argument('--max-episodes', type=int, default=500)
     parser.add_argument('--num-epochs', type=int, default=4)
     parser.add_argument('--actor-lr', type=float, default=0.0003)
     parser.add_argument('--critic-lr', type=float, default=0.001)
@@ -209,11 +228,10 @@ def parse_args():
     parser.add_argument('--mps', action='store_true')
     return parser.parse_args()
 
-def make_env(gym_id, seed, idx, exp_name):
+def make_env(gym_id, seed, idx, exp_name, record_video):
     def thunk():
         env = gym.make(gym_id, render_mode='rgb_array')
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        if idx == 0:
+        if record_video and idx == 0:
             env = gym.wrappers.RecordVideo(
                 env,
                 f'videos/{exp_name}',
@@ -228,17 +246,16 @@ def make_env(gym_id, seed, idx, exp_name):
 if __name__ == '__main__':
     args = parse_args()
 
-    env = make_env('LunarLander-v2', args.seed, 0, args.exp_name)()
+    envs = gym.vector.AsyncVectorEnv(
+        [make_env(args.gym, args.seed, i, args.exp_name, args.record_video) for i in range(args.num_envs)]
+    )
 
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    if isinstance(env.observation_space, gym.spaces.MultiDiscrete):
-        n_state = len(env.observation_space)
-    else:
-        n_state = env.observation_space.shape[0]
-        n_actions = env.action_space.n
+    n_state = np.array(envs.single_observation_space.shape).prod()
+    n_actions = envs.single_action_space.n
 
     device = get_device(args)
 
@@ -274,40 +291,38 @@ if __name__ == '__main__':
     for episode in range(args.max_episodes):
         start_episode_time = time.time()
         buf = RolloutBuffer(device)
-        episodic_returns = []
 
-        state, info = env.reset(seed=args.seed)
+        state, info = envs.reset(seed=args.seed)
 
         for i in range(args.rollout_steps):
             state_input = tensor(state).to(device).float()
-            action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
+            action_dist = actor(state_input)
 
             dist = torch.distributions.Categorical(probs=action_dist)
             action = dist.sample()
             action_logp = dist.log_prob(action) # The log prob of the action we took
 
-            observation, reward, terminated, truncated, info = env.step(action.detach().cpu().numpy())
+            observation, reward, terminated, truncated, info = envs.step(action.detach().cpu().numpy())
 
-            mask = not (terminated or truncated)
+            mask = ~(terminated | truncated)
 
             buf.add_obs(state_input, action, action_logp, mask, reward)
 
             state = observation
 
-            if terminated or truncated:
-                episodic_returns.append(info['episode']['r'])
-                env.reset()
+
+        vector_states = torch.stack(buf.get_states()).to(device)
+        values = critic(vector_states)
+        buf.prep_data(values)
 
         states = buf.get_states()
         actions_logps = buf.get_actions_logps()
         masks = buf.get_masks()
-        values = critic(states)
         rewards = buf.get_rewards()
-        buf.build_returns_advantages(values)
         returns = buf.get_returns()
         advantages = buf.get_advantages()
 
-        num_eps = args.rollout_steps - np.count_nonzero(masks)
+        num_eps = (args.rollout_steps * args.num_envs) - np.count_nonzero(masks)
         if masks[-1]: num_eps += 1
 
         avg_reward = rewards.sum().item() / num_eps
@@ -330,7 +345,6 @@ if __name__ == '__main__':
             'episode/advantages': advantages,
             'episode/values': values,
             'episode/returns': returns,
-            'episode/avg episodic return': np.mean(episodic_returns),
             'avg reward': avg_reward,
             'max reward': rewards.max().item(),
             'avg episode length': args.rollout_steps / num_eps,
