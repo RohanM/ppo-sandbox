@@ -71,6 +71,8 @@ class RolloutBuffer(Dataset):
         self.actions_logps = torch.stack(self.actions_logps).reshape(-1).to(self.device)
         self.masks = tensor(np.array(self.masks)).reshape(-1).to(self.device)
         self.rewards = tensor(np.array(self.rewards)).float().reshape(-1).to(self.device)
+        self.returns = self.returns.reshape(-1, 1)
+        self.advantages = self.advantages.reshape(-1, 1)
 
     def get_states(self):
         return self.states
@@ -97,15 +99,20 @@ class RolloutBuffer(Dataset):
         batch_size = len(self.rewards)
         advantages = torch.zeros(batch_size).to(self.device)
 
+        rewards = tensor(np.array(self.rewards)).float().unsqueeze(2).to(self.device)
+        masks = tensor(np.array(self.masks)).unsqueeze(2).to(self.device)
+        batch_size = rewards.shape[0]
+        advantages = torch.zeros_like(rewards).to(self.device)
+
         for t in reversed(range(batch_size)):
             next_value = values[t + 1] if t < batch_size-1 else values[t]
             next_advantage = advantages[t + 1] if t < batch_size-1 else advantages[t]
 
-            delta = self.rewards[t] + (gamma * next_value * self.masks[t]) - values[t]
-            advantages[t] = delta + (gamma * lmbda * next_advantage * self.masks[t])
+            delta = rewards[t] + (gamma * next_value * masks[t]) - values[t]
+            advantages[t] = delta + (gamma * lmbda * next_advantage * masks[t])
 
-        self.advantages = advantages.unsqueeze(dim=1)
-        self.returns = self.advantages + values
+        self.advantages = advantages
+        self.returns = advantages + values
 
     def __len__(self):
         return len(self.states)
@@ -302,13 +309,14 @@ if __name__ == '__main__':
             state = observation
 
 
+        vector_states = torch.stack(buf.get_states()).to(device)
+        values = critic(vector_states)
+        buf.build_returns_advantages(values)
         buf.prep_data()
         states = buf.get_states()
         actions_logps = buf.get_actions_logps()
         masks = buf.get_masks()
-        values = critic(states)
         rewards = buf.get_rewards()
-        buf.build_returns_advantages(values)
         returns = buf.get_returns()
         advantages = buf.get_advantages()
 
