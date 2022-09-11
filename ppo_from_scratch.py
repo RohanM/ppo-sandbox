@@ -63,7 +63,9 @@ class RolloutBuffer(Dataset):
         self.masks.append(mask)
         self.rewards.append(reward)
 
-    def prep_data(self):
+    def prep_data(self, values):
+        self.__build_returns_advantages(values)
+
         self.states = torch.stack(self.states).reshape(
             (-1,) + envs.single_observation_space.shape
         ).to(self.device)
@@ -95,7 +97,7 @@ class RolloutBuffer(Dataset):
     def get_advantages(self):
         return self.advantages
 
-    def build_returns_advantages(self, values, gamma=0.99, lmbda=0.95):
+    def __build_returns_advantages(self, values, gamma=0.99, lmbda=0.95):
         batch_size = len(self.rewards)
         advantages = torch.zeros(batch_size).to(self.device)
 
@@ -311,8 +313,8 @@ if __name__ == '__main__':
 
         vector_states = torch.stack(buf.get_states()).to(device)
         values = critic(vector_states)
-        buf.build_returns_advantages(values)
-        buf.prep_data()
+        buf.prep_data(values)
+
         states = buf.get_states()
         actions_logps = buf.get_actions_logps()
         masks = buf.get_masks()
