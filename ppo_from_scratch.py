@@ -338,7 +338,7 @@ if __name__ == '__main__':
         rollout_time = start_training_time - start_episode_time
         training_time = end_training_time - start_training_time
         total_time = end_training_time - start_episode_time
-        fps = 60 / total_time
+        step_rate = args.rollout_steps * args.num_envs / total_time
         frac_training = training_time / total_time
 
         wandb.log({
@@ -348,8 +348,8 @@ if __name__ == '__main__':
             'avg reward': avg_reward,
             'max reward': rewards.max().item(),
             'avg episode length': args.rollout_steps / num_eps,
-            'timing/fps': fps,
-            'timing/training:rollout': frac_training,
+            'timing/step rate': step_rate,
+            'timing/training fraction': frac_training,
         })
 
     torch.save(actor.state_dict(), 'actor.pth')
