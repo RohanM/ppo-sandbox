@@ -64,10 +64,14 @@ class RolloutBuffer(Dataset):
         self.rewards.append(reward)
 
     def prep_data(self):
-        self.states = torch.stack(self.states).to(self.device)
+        self.states = torch.stack(self.states).reshape(
+            (-1, 8)
+        ).to(self.device)
         self.actions = torch.tensor(self.actions).to(self.device)
-        self.actions_logps = torch.stack(self.actions_logps).to(self.device)
-        self.rewards = tensor(self.rewards).float().to(self.device)
+        self.actions_logps = torch.stack(self.actions_logps).reshape(-1).to(self.device)
+        self.masks = tensor(np.array(self.masks)).to(self.device)
+        self.rewards = tensor(np.array(self.rewards)).float().reshape(-1).to(self.device)
+
 
     def get_states(self):
         return self.states
