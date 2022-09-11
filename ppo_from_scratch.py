@@ -203,7 +203,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gym', type=str, default='LunarLander-v2')
     parser.add_argument('--exp-name', type=str, default=None)
-    parser.add_argument('--num-envs', type=int, default=1)
+    parser.add_argument('--num-envs', type=int, default=4)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--track', action='store_true')
     parser.add_argument('--record-video', action='store_true')
