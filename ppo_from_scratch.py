@@ -65,13 +65,12 @@ class RolloutBuffer(Dataset):
 
     def prep_data(self):
         self.states = torch.stack(self.states).reshape(
-            (-1, 8)
+            (-1,) + envs.single_observation_space.shape
         ).to(self.device)
         self.actions = torch.tensor(self.actions).to(self.device)
         self.actions_logps = torch.stack(self.actions_logps).reshape(-1).to(self.device)
         self.masks = tensor(np.array(self.masks)).to(self.device)
         self.rewards = tensor(np.array(self.rewards)).float().reshape(-1).to(self.device)
-
 
     def get_states(self):
         return self.states
@@ -204,6 +203,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gym', type=str, default='LunarLander-v2')
     parser.add_argument('--exp-name', type=str, default=None)
+    parser.add_argument('--num-envs', type=int, default=1)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--track', action='store_true')
     parser.add_argument('--record-video', action='store_true')
@@ -237,17 +237,16 @@ def make_env(gym_id, seed, idx, exp_name, record_video):
 if __name__ == '__main__':
     args = parse_args()
 
-    env = make_env('LunarLander-v2', args.seed, 0, args.exp_name, args.record_video)()
+    envs = gym.vector.SyncVectorEnv(
+        [make_env(args.gym, args.seed, i, args.exp_name, args.record_video) for i in range(args.num_envs)]
+    )
 
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    if isinstance(env.observation_space, gym.spaces.MultiDiscrete):
-        n_state = len(env.observation_space)
-    else:
-        n_state = env.observation_space.shape[0]
-        n_actions = env.action_space.n
+    n_state = np.array(envs.single_observation_space.shape).prod()
+    n_actions = envs.single_action_space.n
 
     device = get_device(args)
 
@@ -284,26 +283,24 @@ if __name__ == '__main__':
         start_episode_time = time.time()
         buf = RolloutBuffer(device)
 
-        state, info = env.reset(seed=args.seed)
+        state, info = envs.reset(seed=args.seed)
 
         for i in range(args.rollout_steps):
             state_input = tensor(state).to(device).float()
-            action_dist = actor(state_input.unsqueeze(dim=0)).squeeze()
+            action_dist = actor(state_input)
 
             dist = torch.distributions.Categorical(probs=action_dist)
             action = dist.sample()
             action_logp = dist.log_prob(action) # The log prob of the action we took
 
-            observation, reward, terminated, truncated, info = env.step(action.detach().cpu().numpy())
+            observation, reward, terminated, truncated, info = envs.step(action.detach().cpu().numpy())
 
-            mask = not (terminated or truncated)
+            mask = ~(terminated | truncated)
 
             buf.add_obs(state_input, action, action_logp, mask, reward)
 
             state = observation
 
-            if terminated or truncated:
-                env.reset()
 
         buf.prep_data()
         states = buf.get_states()
@@ -315,7 +312,7 @@ if __name__ == '__main__':
         returns = buf.get_returns()
         advantages = buf.get_advantages()
 
-        num_eps = args.rollout_steps - np.count_nonzero(masks)
+        num_eps = (args.rollout_steps * args.num_envs) - np.count_nonzero(masks)
         if masks[-1]: num_eps += 1
 
         avg_reward = rewards.sum().item() / num_eps
