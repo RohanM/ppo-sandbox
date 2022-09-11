@@ -271,6 +271,7 @@ if __name__ == '__main__':
         name=args.exp_name,
         config={
             'seed': args.seed,
+            'num_envs': args.num_envs,
             'rollout_steps': args.rollout_steps,
             'max_episodes': args.max_episodes,
             'num_epochs': args.num_epochs,
