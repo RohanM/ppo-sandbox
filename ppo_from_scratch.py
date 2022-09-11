@@ -235,7 +235,7 @@ def make_env(gym_id, seed, idx, exp_name, record_video):
             env = gym.wrappers.RecordVideo(
                 env,
                 f'videos/{exp_name}',
-                episode_trigger=lambda t: t % 1000 == 0
+                step_trigger=lambda t: t % 50000 == 0,
             )
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
