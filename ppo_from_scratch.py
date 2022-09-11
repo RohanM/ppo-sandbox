@@ -246,7 +246,7 @@ def make_env(gym_id, seed, idx, exp_name, record_video):
 if __name__ == '__main__':
     args = parse_args()
 
-    envs = gym.vector.SyncVectorEnv(
+    envs = gym.vector.AsyncVectorEnv(
         [make_env(args.gym, args.seed, i, args.exp_name, args.record_video) for i in range(args.num_envs)]
     )
 
