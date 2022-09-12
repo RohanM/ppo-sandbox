@@ -215,7 +215,8 @@ def parse_args():
     parser.add_argument('--num-envs', type=int, default=32)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--track', action='store_true')
-    parser.add_argument('--record-video', action='store_true')
+    parser.add_argument('--record-video-every', type=int, default=None,
+                        help='Record video every n steps (eg. 10000)')
     parser.add_argument('--rollout-steps', type=int, default=125)
     parser.add_argument('--max-episodes', type=int, default=500)
     parser.add_argument('--num-epochs', type=int, default=4)
@@ -228,14 +229,14 @@ def parse_args():
     parser.add_argument('--mps', action='store_true')
     return parser.parse_args()
 
-def make_env(gym_id, seed, idx, exp_name, record_video):
+def make_env(gym_id, seed, idx, exp_name, record_video_steps):
     def thunk():
         env = gym.make(gym_id, render_mode='rgb_array')
-        if record_video and idx == 0:
+        if record_video_steps is not None and idx == 0:
             env = gym.wrappers.RecordVideo(
                 env,
                 f'videos/{exp_name}',
-                step_trigger=lambda t: t % 50000 == 0,
+                step_trigger=lambda t: t % record_video_steps == 0,
             )
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
@@ -247,7 +248,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     envs = gym.vector.AsyncVectorEnv(
-        [make_env(args.gym, args.seed, i, args.exp_name, args.record_video) for i in range(args.num_envs)]
+        [make_env(args.gym, args.seed, i, args.exp_name, args.record_video_every) for i in range(args.num_envs)]
     )
 
     random.seed(args.seed)
