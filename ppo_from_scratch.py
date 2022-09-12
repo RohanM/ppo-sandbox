@@ -212,6 +212,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--gym', type=str, default='LunarLander-v2')
     parser.add_argument('--exp-name', type=str, default=None)
+    parser.add_argument('--tags', type=str, default=None)
     parser.add_argument('--num-envs', type=int, default=32)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--track', action='store_true')
@@ -270,6 +271,7 @@ if __name__ == '__main__':
         mode='online' if args.track else 'disabled',
         project='ppo-sandbox-lunar-lander',
         name=args.exp_name,
+        tags=args.tags,
         config={
             'seed': args.seed,
             'num_envs': args.num_envs,
