@@ -16,3 +16,22 @@ Many parameters are configurable from the command line. For an overview, see:
 ```
 poetry run python ppo_from_scratch.py --help
 ```
+
+## Troubleshooting
+
+In some cases you may encounter issues installing `gym[box2d]`, related to swig.
+First, check that swig is installed:
+
+```
+# MacOS
+brew install swig
+
+# Ubuntu / Debian
+sudo apt install swig
+```
+
+Then manually install box2d in the venv:
+
+```
+poetry run pip install gym[box2d]
+```
