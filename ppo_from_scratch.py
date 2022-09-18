@@ -43,7 +43,8 @@ class CriticModel(nn.Sequential):
 
 
 class RolloutBuffer(Dataset):
-    def __init__(self, device=torch.device('cpu')):
+    def __init__(self, n_state, device=torch.device('cpu')):
+        self.n_state = n_state
         self.device = device
         self.reset()
 
@@ -67,7 +68,7 @@ class RolloutBuffer(Dataset):
         self.__build_returns_advantages(values)
 
         self.states = torch.stack(self.states).reshape(
-            (-1,) + envs.single_observation_space.shape
+            (-1, self.n_state)
         ).to(self.device)
         self.actions = torch.stack(self.actions).reshape(-1).to(self.device)
         self.actions_logps = torch.stack(self.actions_logps).reshape(-1).to(self.device)
@@ -294,7 +295,7 @@ if __name__ == '__main__':
 
     for episode in range(args.max_episodes):
         start_episode_time = time.time()
-        buf = RolloutBuffer(device)
+        buf = RolloutBuffer(n_state, device)
 
         state, info = envs.reset(seed=args.seed)
 
