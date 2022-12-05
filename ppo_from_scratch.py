@@ -9,16 +9,16 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 import wandb
 import argparse
-from typing import cast
+from typing import cast, Callable
 
 
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+def layer_init(layer: nn.Linear, std: float = np.sqrt(2), bias_const: float = 0.0) -> nn.Linear:
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
 class ActorModel(nn.Sequential):
-    def __init__(self, num_input=8, num_hidden=32, num_output=4):
+    def __init__(self, num_input: int = 8, num_hidden: int = 32, num_output: int = 4):
         layers = [
             layer_init(nn.Linear(num_input, num_hidden)),
             nn.Tanh(),
@@ -31,7 +31,7 @@ class ActorModel(nn.Sequential):
 
 
 class CriticModel(nn.Sequential):
-    def __init__(self, num_input=8, num_hidden=32):
+    def __init__(self, num_input: int = 8, num_hidden: int = 32):
         num_output = 1
         layers = [
             layer_init(nn.Linear(num_input, num_hidden)),
@@ -44,7 +44,7 @@ class CriticModel(nn.Sequential):
 
 
 class RolloutBuffer(Dataset):
-    def __init__(self, n_state, device=torch.device('cpu')):
+    def __init__(self, n_state: int, device: torch.device = torch.device('cpu')):
         self.n_state = n_state
         self.device = device
         self.reset()
@@ -65,7 +65,7 @@ class RolloutBuffer(Dataset):
         self.masks.append(mask)
         self.rewards.append(reward)
 
-    def prep_data(self, values):
+    def prep_data(self, values: Tensor):
         self.__build_returns_advantages(values)
 
         self.states = torch.stack(self.states).reshape(
@@ -78,28 +78,28 @@ class RolloutBuffer(Dataset):
         self.returns = self.returns.reshape(-1, 1)
         self.advantages = self.advantages.reshape(-1, 1)
 
-    def get_states(self):
+    def get_states(self) -> list[Tensor]:
         return self.states
 
-    def get_actions(self):
+    def get_actions(self) -> Tensor:
         return self.actions
 
-    def get_actions_logps(self):
+    def get_actions_logps(self) -> Tensor:
         return self.actions_logps
 
-    def get_masks(self):
+    def get_masks(self) -> list[bool]:
         return self.masks
 
-    def get_rewards(self):
+    def get_rewards(self) -> Tensor:
         return self.rewards
 
-    def get_returns(self):
+    def get_returns(self) -> Tensor:
         return self.returns
 
-    def get_advantages(self):
+    def get_advantages(self) -> Tensor:
         return self.advantages
 
-    def __build_returns_advantages(self, values, gamma=0.99, lmbda=0.95):
+    def __build_returns_advantages(self, values: Tensor, gamma: float = 0.99, lmbda: float = 0.95):
         batch_size = len(self.rewards)
         advantages = torch.zeros(batch_size).to(self.device)
 
@@ -118,10 +118,10 @@ class RolloutBuffer(Dataset):
         self.advantages = advantages
         self.returns = advantages + values
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.states)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return (
             self.states[idx],
             self.actions[idx],
@@ -134,7 +134,7 @@ class RolloutBuffer(Dataset):
 
 
 class Trainer:
-    def __init__(self, actor, critic, actor_lr, critic_lr, batch_size, epsilon, wandb):
+    def __init__(self, actor: ActorModel, critic: CriticModel, actor_lr: float, critic_lr: float, batch_size: int, epsilon: float, wandb):
         self.actor = actor
         self.critic = critic
         self.actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
@@ -144,7 +144,7 @@ class Trainer:
         self.wandb = wandb
 
 
-    def actor_loss(self, newpolicy_logp, oldpolicy_logp, advantages):
+    def actor_loss(self, newpolicy_logp: Tensor, oldpolicy_logp: Tensor, advantages: Tensor) -> tuple[Tensor, dict]:
         ratio = torch.exp(newpolicy_logp - oldpolicy_logp)
         p1 = ratio * advantages
         p2 = torch.clip(ratio, min=1 - self.epsilon, max=1 + self.epsilon) * advantages
@@ -196,7 +196,7 @@ class Trainer:
                     'actor clipfrac': actor_loss_info['clipfrac'],
                 })
 
-def get_device(args):
+def get_device(args) -> torch.device:
     if torch.cuda.is_available():
         return torch.device('cuda')
     elif torch.backends.mps.is_available() and args.mps:
@@ -204,7 +204,7 @@ def get_device(args):
     else:
         return torch.device('cpu')
 
-def cat(a, b):
+def cat(a: Tensor, b: Tensor) -> Tensor:
     return torch.cat((a, b.float().unsqueeze(dim=0)))
 
 def normalise(t: Tensor) -> Tensor:
@@ -232,7 +232,7 @@ def parse_args():
     parser.add_argument('--mps', action='store_true')
     return parser.parse_args()
 
-def make_env(gym_id, seed, idx, exp_name, record_video_steps):
+def make_env(gym_id: str, seed: int, idx: int, exp_name: str, record_video_steps: bool) -> Callable:
     def thunk():
         env = gym.make(gym_id, render_mode='rgb_array')
         if record_video_steps is not None and idx == 0:
