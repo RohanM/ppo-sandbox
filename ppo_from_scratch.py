@@ -9,6 +9,7 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 import wandb
 import argparse
+from typing import cast
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -258,7 +259,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     n_state = np.array(envs.single_observation_space.shape).prod()
-    n_actions = envs.single_action_space.n
+    n_actions = cast(gym.spaces.Discrete, envs.single_action_space).n
 
     device = get_device(args)
 
