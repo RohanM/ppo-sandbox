@@ -42,8 +42,12 @@ disallow_any_generics = true
 
 #disallow_untyped_calls = true
 disallow_incomplete_defs = true
-#disallow_untyped_defs = true
+disallow_untyped_defs = true
 
 #no_implicit_reexport = True
 
 #warn_return_any = True
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false

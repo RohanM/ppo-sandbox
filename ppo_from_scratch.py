@@ -52,7 +52,7 @@ class RolloutBuffer:
     masks: list[NDArray[np.bool_]]
     rewards: list[NDArray[np.float64]]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.states = []
         self.actions = []
         self.actions_logps = []
@@ -188,7 +188,7 @@ def get_device(args: argparse.Namespace) -> torch.device:
     else:
         return torch.device('cpu')
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--gym', type=str, default='LunarLander-v2')
     parser.add_argument('--exp-name', type=str, default=None)
@@ -211,7 +211,7 @@ def parse_args():
     return parser.parse_args()
 
 def make_env(gym_id: str, seed: int, idx: int, exp_name: str, record_video_steps: bool) -> Callable[[], gym.Env[int, int]]:
-    def thunk():
+    def thunk() -> gym.Env[int, int]:
         env = gym.make(gym_id, render_mode='rgb_array')
         if record_video_steps is not None and idx == 0:
             env = gym.wrappers.RecordVideo(
