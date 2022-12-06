@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 import wandb
 import argparse
 from typing import cast, Callable
+from numpy.typing import NDArray
 
 
 def layer_init(layer: nn.Linear, std: float = np.sqrt(2), bias_const: float = 0.0) -> nn.Linear:
@@ -43,10 +44,14 @@ class CriticModel(nn.Sequential):
         super().__init__(*layers)
 
 
-class RolloutBuffer(Dataset):
-    def __init__(self, n_state: int, device: torch.device = torch.device('cpu')):
-        self.n_state = n_state
-        self.device = device
+class RolloutBuffer:
+    states: list[Tensor]
+    actions: list[Tensor]
+    actions_logps: list[Tensor]
+    masks: list[NDArray]
+    rewards: list[NDArray]
+
+    def __init__(self):
         self.reset()
 
     def reset(self):
@@ -55,56 +60,46 @@ class RolloutBuffer(Dataset):
         self.actions_logps = []
         self.masks = []
         self.rewards = []
-        self.returns = None
-        self.advantages = None
 
-    def add_obs(self, state: Tensor, action: int, action_logp: float, mask: bool, reward: float):
+    def add_obs(self, state: Tensor, action: Tensor, action_logp: Tensor, mask: NDArray, reward: NDArray):
         self.states.append(state)
         self.actions.append(action)
         self.actions_logps.append(action_logp)
         self.masks.append(mask)
         self.rewards.append(reward)
 
-    def prep_data(self, values: Tensor):
-        self.__build_returns_advantages(values)
 
-        self.states = torch.stack(self.states).reshape(
-            (-1, self.n_state)
+class RolloutDataset(Dataset):
+    device: torch.device
+    states: Tensor
+    actions: Tensor
+    actions_logps: Tensor
+    masks: Tensor
+    rewards: Tensor
+    returns: Tensor
+    advantages: Tensor
+
+    def __init__(self, rollout_buffer: RolloutBuffer, values: Tensor, n_state: int, device: torch.device = torch.device('cpu'), gamma: float = 0.99, lmbda: float = 0.95):
+        self.device = device
+        self.__build_returns_advantages(rollout_buffer, values, gamma, lmbda)
+
+        self.states = torch.stack(rollout_buffer.states).reshape(
+            (-1, n_state)
         ).to(self.device)
-        self.actions = torch.stack(self.actions).reshape(-1).to(self.device)
-        self.actions_logps = torch.stack(self.actions_logps).reshape(-1).to(self.device)
-        self.masks = tensor(np.array(self.masks)).reshape(-1).to(self.device)
-        self.rewards = tensor(np.array(self.rewards)).float().reshape(-1).to(self.device)
+        self.actions = torch.stack(rollout_buffer.actions).reshape(-1).to(self.device)
+        self.actions_logps = torch.stack(rollout_buffer.actions_logps).reshape(-1).to(self.device)
+        self.masks = tensor(np.array(rollout_buffer.masks)).reshape(-1).to(self.device)
+        self.rewards = tensor(np.array(rollout_buffer.rewards)).float().reshape(-1).to(self.device)
         self.returns = self.returns.reshape(-1, 1)
         self.advantages = self.advantages.reshape(-1, 1)
 
-    def get_states(self) -> list[Tensor]:
-        return self.states
 
-    def get_actions(self) -> Tensor:
-        return self.actions
-
-    def get_actions_logps(self) -> Tensor:
-        return self.actions_logps
-
-    def get_masks(self) -> list[bool]:
-        return self.masks
-
-    def get_rewards(self) -> Tensor:
-        return self.rewards
-
-    def get_returns(self) -> Tensor:
-        return self.returns
-
-    def get_advantages(self) -> Tensor:
-        return self.advantages
-
-    def __build_returns_advantages(self, values: Tensor, gamma: float = 0.99, lmbda: float = 0.95):
-        batch_size = len(self.rewards)
+    def __build_returns_advantages(self, rollout_buffer: RolloutBuffer, values: Tensor, gamma: float = 0.99, lmbda: float = 0.95):
+        batch_size = len(rollout_buffer.rewards)
         advantages = torch.zeros(batch_size).to(self.device)
 
-        rewards = tensor(np.array(self.rewards)).float().unsqueeze(2).to(self.device)
-        masks = tensor(np.array(self.masks)).unsqueeze(2).to(self.device)
+        rewards = tensor(np.array(rollout_buffer.rewards)).float().unsqueeze(2).to(self.device)
+        masks = tensor(np.array(rollout_buffer.masks)).unsqueeze(2).to(self.device)
         batch_size = rewards.shape[0]
         advantages = torch.zeros_like(rewards).to(self.device)
 
@@ -157,8 +152,8 @@ class Trainer:
         return actor_loss, { 'approx_kl': approx_kl, 'clipfrac': clipfrac }
 
 
-    def train(self, num_epochs: int, buf: RolloutBuffer):
-        data_loader = DataLoader(buf, batch_size=self.batch_size, shuffle=True)
+    def train(self, num_epochs: int, dataset: RolloutDataset):
+        data_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
         self.actor.train()
         self.critic.train()
         for epoch in range(num_epochs):
@@ -296,7 +291,7 @@ if __name__ == '__main__':
 
     for episode in range(args.max_episodes):
         start_episode_time = time.time()
-        buf = RolloutBuffer(n_state, device)
+        buf = RolloutBuffer()
 
         state, info = envs.reset(seed=args.seed)
 
@@ -317,16 +312,17 @@ if __name__ == '__main__':
             state = observation
 
 
-        vector_states = torch.stack(buf.get_states()).to(device)
+        vector_states = torch.stack(buf.states).to(device)
         values = critic(vector_states)
-        buf.prep_data(values)
 
-        states = buf.get_states()
-        actions_logps = buf.get_actions_logps()
-        masks = buf.get_masks()
-        rewards = buf.get_rewards()
-        returns = buf.get_returns()
-        advantages = buf.get_advantages()
+        dataset = RolloutDataset(buf, values, n_state)
+
+        states = dataset.states
+        actions_logps = dataset.actions_logps
+        masks = dataset.masks
+        rewards = dataset.rewards
+        returns = dataset.returns
+        advantages = dataset.advantages
 
         num_eps = (args.rollout_steps * args.num_envs) - np.count_nonzero(masks)
         if masks[-1]: num_eps += 1
@@ -337,7 +333,7 @@ if __name__ == '__main__':
 
         start_training_time = time.time()
 
-        trainer.train(args.num_epochs, buf)
+        trainer.train(args.num_epochs, dataset)
 
         end_training_time = time.time()
 
