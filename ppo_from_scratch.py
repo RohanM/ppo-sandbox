@@ -166,16 +166,10 @@ class Trainer:
                 critic_loss_v = F.mse_loss(values, returns.detach())
 
                 actor_loss_v.backward(retain_graph=True)
-                # self.wandb.log({
-                #     'gradients/actor': torch.cat([p.grad.view(-1) for p in actor.parameters()])
-                # })
                 self.actor_opt.step()
                 self.actor_opt.zero_grad()
 
                 critic_loss_v.backward()
-                # self.wandb.log({
-                #     'gradients/critic': torch.cat([p.grad.view(-1) for p in critic.parameters()])
-                # })
                 self.critic_opt.step()
                 self.critic_opt.zero_grad()
 
@@ -193,12 +187,6 @@ def get_device(args) -> torch.device:
         return torch.device('mps')
     else:
         return torch.device('cpu')
-
-def cat(a: Tensor, b: Tensor) -> Tensor:
-    return torch.cat((a, b.float().unsqueeze(dim=0)))
-
-def normalise(t: Tensor) -> Tensor:
-    return (t - t.mean()) / (t.std() + 1e-10)
 
 def parse_args():
     parser = argparse.ArgumentParser()
