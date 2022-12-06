@@ -18,6 +18,7 @@ def layer_init(layer: nn.Linear, std: float = np.sqrt(2), bias_const: float = 0.
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
+
 class ActorModel(nn.Sequential):
     def __init__(self, num_input: int = 8, num_hidden: int = 32, num_output: int = 4):
         layers = [
@@ -52,9 +53,6 @@ class RolloutBuffer:
     rewards: list[NDArray]
 
     def __init__(self):
-        self.reset()
-
-    def reset(self):
         self.states = []
         self.actions = []
         self.actions_logps = []
