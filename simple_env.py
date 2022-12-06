@@ -1,7 +1,7 @@
 import gym
 import numpy as np
 from numpy.typing import NDArray
-
+from typing import Any
 
 # A very simple environment that gives -1 reward for every step, but 20 reward
 # for a sequence of 5 identical steps.
@@ -23,14 +23,14 @@ class SimpleEnvV0(gym.Env[NDArray[np.int32], int]):
         self.done = False
         return self.state
 
-    def step(self, action: int):
+    def step(self, action: int) -> tuple[NDArray[np.int32], float, bool, bool, dict[Any, Any]]:
         if action in [0, 1]:
             self.state = np.concatenate((self.state[1:], np.array([action+1])))
         else:
             raise ValueError("Invalid action")
         self.done = (self.state == 1).all()
         reward = self.reward_on_success if self.done else self.reward_per_turn
-        return self.state, reward, self.done, {}
+        return self.state, reward, self.done, False, {}
 
 
 # A "copy me" env - +1 for successful copy, -1 for fail, -10 for if score

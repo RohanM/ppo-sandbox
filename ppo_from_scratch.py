@@ -9,7 +9,7 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 import wandb
 import argparse
-from typing import cast, Callable
+from typing import cast, Callable, Any
 from numpy.typing import NDArray
 
 
@@ -59,7 +59,7 @@ class RolloutBuffer:
         self.masks = []
         self.rewards = []
 
-    def add_obs(self, state: Tensor, action: Tensor, action_logp: Tensor, mask: NDArray[np.bool_], reward: NDArray[np.float64]):
+    def add_obs(self, state: Tensor, action: Tensor, action_logp: Tensor, mask: NDArray[np.bool_], reward: NDArray[np.float64]) -> None:
         self.states.append(state)
         self.actions.append(action)
         self.actions_logps.append(action_logp)
@@ -89,7 +89,7 @@ class RolloutDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tenso
         self.rewards = tensor(np.array(rollout_buffer.rewards)).float().reshape(-1).to(self.device)
         self.returns, self.advantages = self.__build_returns_advantages(rollout_buffer, values, gamma, lmbda)
 
-    def __build_returns_advantages(self, rollout_buffer: RolloutBuffer, values: Tensor, gamma: float = 0.99, lmbda: float = 0.95):
+    def __build_returns_advantages(self, rollout_buffer: RolloutBuffer, values: Tensor, gamma: float = 0.99, lmbda: float = 0.95) -> tuple[Tensor, Tensor]:
         batch_size = len(rollout_buffer.rewards)
         advantages = torch.zeros(batch_size).to(self.device)
 
@@ -124,7 +124,7 @@ class RolloutDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tenso
 
 
 class Trainer:
-    def __init__(self, actor: ActorModel, critic: CriticModel, actor_lr: float, critic_lr: float, batch_size: int, epsilon: float, wandb):
+    def __init__(self, actor: ActorModel, critic: CriticModel, actor_lr: float, critic_lr: float, batch_size: int, epsilon: float, wandb: Any) -> None:
         self.actor = actor
         self.critic = critic
         self.actor_opt = optim.Adam(actor.parameters(), lr=actor_lr)
@@ -147,7 +147,7 @@ class Trainer:
         return actor_loss, { 'approx_kl': approx_kl, 'clipfrac': clipfrac }
 
 
-    def train(self, num_epochs: int, dataset: RolloutDataset):
+    def train(self, num_epochs: int, dataset: RolloutDataset) -> None:
         data_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
         self.actor.train()
         self.critic.train()
@@ -180,7 +180,7 @@ class Trainer:
                     'actor clipfrac': actor_loss_info['clipfrac'],
                 })
 
-def get_device(args) -> torch.device:
+def get_device(args: argparse.Namespace) -> torch.device:
     if torch.cuda.is_available():
         return torch.device('cuda')
     elif torch.backends.mps.is_available() and args.mps:
