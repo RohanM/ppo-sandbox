@@ -79,7 +79,6 @@ class RolloutDataset(Dataset):
 
     def __init__(self, rollout_buffer: RolloutBuffer, values: Tensor, n_state: int, device: torch.device = torch.device('cpu'), gamma: float = 0.99, lmbda: float = 0.95):
         self.device = device
-        self.__build_returns_advantages(rollout_buffer, values, gamma, lmbda)
 
         self.states = torch.stack(rollout_buffer.states).reshape(
             (-1, n_state)
@@ -88,9 +87,7 @@ class RolloutDataset(Dataset):
         self.actions_logps = torch.stack(rollout_buffer.actions_logps).reshape(-1).to(self.device)
         self.masks = tensor(np.array(rollout_buffer.masks)).reshape(-1).to(self.device)
         self.rewards = tensor(np.array(rollout_buffer.rewards)).float().reshape(-1).to(self.device)
-        self.returns = self.returns.reshape(-1, 1)
-        self.advantages = self.advantages.reshape(-1, 1)
-
+        self.returns, self.advantages = self.__build_returns_advantages(rollout_buffer, values, gamma, lmbda)
 
     def __build_returns_advantages(self, rollout_buffer: RolloutBuffer, values: Tensor, gamma: float = 0.99, lmbda: float = 0.95):
         batch_size = len(rollout_buffer.rewards)
@@ -108,8 +105,8 @@ class RolloutDataset(Dataset):
             delta = rewards[t] + (gamma * next_value * masks[t]) - values[t]
             advantages[t] = delta + (gamma * lmbda * next_advantage * masks[t])
 
-        self.advantages = advantages
-        self.returns = advantages + values
+        returns = advantages + values
+        return returns.reshape(-1, 1), advantages.reshape(-1, 1)
 
     def __len__(self) -> int:
         return len(self.states)
