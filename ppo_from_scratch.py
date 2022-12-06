@@ -49,8 +49,8 @@ class RolloutBuffer:
     states: list[Tensor]
     actions: list[Tensor]
     actions_logps: list[Tensor]
-    masks: list[NDArray]
-    rewards: list[NDArray]
+    masks: list[NDArray[np.bool_]]
+    rewards: list[NDArray[np.float64]]
 
     def __init__(self):
         self.states = []
@@ -59,7 +59,7 @@ class RolloutBuffer:
         self.masks = []
         self.rewards = []
 
-    def add_obs(self, state: Tensor, action: Tensor, action_logp: Tensor, mask: NDArray, reward: NDArray):
+    def add_obs(self, state: Tensor, action: Tensor, action_logp: Tensor, mask: NDArray[np.bool_], reward: NDArray[np.float64]):
         self.states.append(state)
         self.actions.append(action)
         self.actions_logps.append(action_logp)
@@ -67,7 +67,7 @@ class RolloutBuffer:
         self.rewards.append(reward)
 
 
-class RolloutDataset(Dataset):
+class RolloutDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]]):
     device: torch.device
     states: Tensor
     actions: Tensor
@@ -134,7 +134,7 @@ class Trainer:
         self.wandb = wandb
 
 
-    def actor_loss(self, newpolicy_logp: Tensor, oldpolicy_logp: Tensor, advantages: Tensor) -> tuple[Tensor, dict]:
+    def actor_loss(self, newpolicy_logp: Tensor, oldpolicy_logp: Tensor, advantages: Tensor) -> tuple[Tensor, dict[str, float]]:
         ratio = torch.exp(newpolicy_logp - oldpolicy_logp)
         p1 = ratio * advantages
         p2 = torch.clip(ratio, min=1 - self.epsilon, max=1 + self.epsilon) * advantages
@@ -210,7 +210,7 @@ def parse_args():
     parser.add_argument('--mps', action='store_true')
     return parser.parse_args()
 
-def make_env(gym_id: str, seed: int, idx: int, exp_name: str, record_video_steps: bool) -> Callable:
+def make_env(gym_id: str, seed: int, idx: int, exp_name: str, record_video_steps: bool) -> Callable[[], gym.Env[int, int]]:
     def thunk():
         env = gym.make(gym_id, render_mode='rgb_array')
         if record_video_steps is not None and idx == 0:

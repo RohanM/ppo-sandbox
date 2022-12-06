@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 
 # A very simple environment that gives -1 reward for every step, but 20 reward
 # for a sequence of 5 identical steps.
-class SimpleEnvV0(gym.Env):
+class SimpleEnvV0(gym.Env[NDArray[np.int32], int]):
     state: NDArray[np.int32]
 
     def __init__(self, render_mode=None):
@@ -30,13 +30,12 @@ class SimpleEnvV0(gym.Env):
             raise ValueError("Invalid action")
         self.done = (self.state == 1).all()
         reward = self.reward_on_success if self.done else self.reward_per_turn
-        info: dict = {}
-        return self.state, reward, self.done, info
+        return self.state, reward, self.done, {}
 
 
 # A "copy me" env - +1 for successful copy, -1 for fail, -10 for if score
 # drops below -50.
-class SimpleEnvV1(gym.Env):
+class SimpleEnvV1(gym.Env[int, int]):
     def __init__(self, render_mode=None, size=5, fail_threshold=-50):
         assert render_mode == None
         self.size = size
