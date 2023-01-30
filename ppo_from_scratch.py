@@ -300,19 +300,12 @@ if __name__ == '__main__':
 
         dataset = RolloutDataset(buf, values, n_state)
 
-        states = dataset.states
-        actions_logps = dataset.actions_logps
-        masks = dataset.masks
-        rewards = dataset.rewards
-        returns = dataset.returns
-        advantages = dataset.advantages
+        num_eps = (args.rollout_steps * args.num_envs) - np.count_nonzero(dataset.masks)
+        if dataset.masks[-1]: num_eps += 1
 
-        num_eps = (args.rollout_steps * args.num_envs) - np.count_nonzero(masks)
-        if masks[-1]: num_eps += 1
-
-        avg_reward = rewards.sum().item() / num_eps
+        avg_reward = dataset.rewards.sum().item() / num_eps
         avg_rewards.append(avg_reward)
-        print(f'{episode+1}/{args.max_episodes}, {rewards.mean():.4f}, {rewards.max():.4f}, {num_eps}, {avg_reward:.4f}')
+        print(f'{episode+1}/{args.max_episodes}, {dataset.rewards.mean():.4f}, {dataset.rewards.max():.4f}, {num_eps}, {avg_reward:.4f}')
 
         start_training_time = time.time()
 
@@ -327,11 +320,11 @@ if __name__ == '__main__':
         frac_training = training_time / total_time
 
         wandb.log({
-            'episode/advantages': advantages,
+            'episode/advantages': dataset.advantages,
             'episode/values': values,
-            'episode/returns': returns,
+            'episode/returns': dataset.returns,
             'avg reward': avg_reward,
-            'max reward': rewards.max().item(),
+            'max reward': dataset.rewards.max().item(),
             'avg episode length': args.rollout_steps / num_eps,
             'timing/step rate': step_rate,
             'timing/training fraction': frac_training,
